@@ -2651,15 +2651,24 @@ impl From<McpAuthenticationMode> for crate::http::jwt::Mode {
 #[apply(schema_de!)]
 pub struct LocalMcpAuthentication {
 	/// Expected token issuer, matched against the JWT `iss` claim.
-	pub issuer: String,
+	///
+	/// Deprecated for new multi-provider MCP auth config. Use `providers` instead.
+	pub issuer: Option<String>,
 	/// Accepted token audiences, matched against the JWT `aud` claim.
-	pub audiences: Vec<String>,
+	///
+	/// Deprecated for new multi-provider MCP auth config. Use `providers` instead.
+	pub audiences: Option<Vec<String>>,
 	/// Identity provider type used to derive MCP authorization metadata and default JWKS URLs.
 	pub provider: Option<McpIDP>,
 	/// Protected resource metadata returned to MCP clients.
 	pub resource_metadata: ResourceMetadata,
 	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
-	pub jwks: FileInlineOrRemote,
+	///
+	/// Deprecated for new multi-provider MCP auth config. Use `providers` instead.
+	pub jwks: Option<FileInlineOrRemote>,
+	/// Trusted token issuers accepted by MCP authentication.
+	#[serde(default)]
+	pub providers: Vec<LocalMcpAuthenticationProvider>,
 	/// Controls whether MCP requests must include a valid JWT.
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
@@ -2673,8 +2682,32 @@ pub struct LocalMcpAuthentication {
 	pub client_id: Option<String>,
 }
 
-impl LocalMcpAuthentication {
-	pub fn as_jwt(&self) -> anyhow::Result<http::jwt::LocalJwtConfig> {
+#[apply(schema_de!)]
+pub struct LocalMcpAuthenticationProvider {
+	/// Expected token issuer, matched against the JWT `iss` claim.
+	pub issuer: String,
+	/// Accepted token audiences, matched against the JWT `aud` claim.
+	pub audiences: Vec<String>,
+	/// Identity provider type used to derive MCP authorization metadata and default JWKS URLs.
+	pub provider: Option<McpIDP>,
+	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
+	pub jwks: FileInlineOrRemote,
+	/// Whether this provider should be used when deriving MCP protected-resource metadata.
+	#[serde(default = "default_mcp_provider_discoverable")]
+	pub discoverable: bool,
+	/// Claim requirements to enforce after the token signature is verified.
+	#[serde(default)]
+	pub jwt_validation_options: http::jwt::JWTValidationOptions,
+	/// OAuth client ID advertised to MCP clients when needed.
+	pub client_id: Option<String>,
+}
+
+fn default_mcp_provider_discoverable() -> bool {
+	true
+}
+
+impl LocalMcpAuthenticationProvider {
+	fn resolved_jwks(&self) -> anyhow::Result<FileInlineOrRemote> {
 		let jwks = match &self.jwks {
 			FileInlineOrRemote::Remote { url } => FileInlineOrRemote::Remote {
 				url: if !url.to_string().is_empty() {
@@ -2715,13 +2748,78 @@ impl LocalMcpAuthentication {
 			FileInlineOrRemote::Inline(_) | FileInlineOrRemote::File { .. } => self.jwks.clone(),
 		};
 
+		Ok(jwks)
+	}
+
+	fn as_jwt_provider(&self) -> anyhow::Result<http::jwt::ProviderConfig> {
+		Ok(http::jwt::ProviderConfig {
+			issuer: self.issuer.clone(),
+			audiences: Some(self.audiences.clone()),
+			jwks: self.resolved_jwks()?,
+			jwt_validation_options: self.jwt_validation_options.clone(),
+		})
+	}
+}
+
+impl LocalMcpAuthentication {
+	fn legacy_provider(&self) -> anyhow::Result<LocalMcpAuthenticationProvider> {
+		Ok(LocalMcpAuthenticationProvider {
+			issuer: self
+				.issuer
+				.clone()
+				.ok_or_else(|| anyhow::anyhow!("mcpAuthentication requires issuer or providers"))?,
+			audiences: self
+				.audiences
+				.clone()
+				.ok_or_else(|| anyhow::anyhow!("mcpAuthentication requires audiences or providers"))?,
+			provider: self.provider.clone(),
+			jwks: self
+				.jwks
+				.clone()
+				.ok_or_else(|| anyhow::anyhow!("mcpAuthentication requires jwks or providers"))?,
+			discoverable: true,
+			jwt_validation_options: self.jwt_validation_options.clone(),
+			client_id: self.client_id.clone(),
+		})
+	}
+
+	fn metadata_provider(&self) -> anyhow::Result<LocalMcpAuthenticationProvider> {
+		if self.providers.is_empty() {
+			return self.legacy_provider();
+		}
+
+		self
+			.providers
+			.iter()
+			.find(|provider| provider.discoverable)
+			.or_else(|| self.providers.first())
+			.cloned()
+			.ok_or_else(|| anyhow::anyhow!("mcpAuthentication providers cannot be empty"))
+	}
+
+	pub fn as_jwt(&self) -> anyhow::Result<http::jwt::LocalJwtConfig> {
+		if !self.providers.is_empty() {
+			return Ok(http::jwt::LocalJwtConfig::Multi {
+				mode: self.mode.into(),
+				location: self.authorization_location.clone(),
+				providers: self
+					.providers
+					.iter()
+					.map(LocalMcpAuthenticationProvider::as_jwt_provider)
+					.collect::<anyhow::Result<Vec<_>>>()?,
+			});
+		}
+
+		let provider = self.legacy_provider()?;
+		let jwks = provider.resolved_jwks()?;
+
 		Ok(http::jwt::LocalJwtConfig::Single {
 			mode: self.mode.into(),
 			location: self.authorization_location.clone(),
-			issuer: self.issuer.clone(),
-			audiences: Some(self.audiences.clone()),
+			issuer: provider.issuer,
+			audiences: Some(provider.audiences),
 			jwks,
-			jwt_validation_options: self.jwt_validation_options.clone(),
+			jwt_validation_options: provider.jwt_validation_options,
 		})
 	}
 
@@ -2732,14 +2830,15 @@ impl LocalMcpAuthentication {
 	) -> anyhow::Result<McpAuthentication> {
 		let jwt_cfg = self.as_jwt()?;
 		let jwt = jwt_cfg.try_into(resources).await?;
+		let metadata_provider = self.metadata_provider()?;
 		Ok(McpAuthentication {
-			issuer: self.issuer.clone(),
-			audiences: self.audiences.clone(),
-			provider: self.provider.clone(),
+			issuer: metadata_provider.issuer,
+			audiences: metadata_provider.audiences,
+			provider: metadata_provider.provider,
 			resource_metadata: self.resource_metadata.clone(),
 			jwt_validator: Arc::new(jwt),
 			mode: self.mode,
-			client_id: self.client_id.clone(),
+			client_id: metadata_provider.client_id,
 		})
 	}
 }
@@ -3349,6 +3448,57 @@ jwtValidationOptions:
 			},
 			_ => panic!("Expected LocalJwtConfig::Single"),
 		}
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_accepts_multiple_providers() {
+		let yaml = r#"
+providers:
+  - issuer: "https://accounts.google.com"
+    audiences: ["mcp-gw"]
+    jwks: '{"keys":[]}'
+    discoverable: true
+  - issuer: "https://burble.example.com"
+    audiences: ["mcp-gw"]
+    jwks: '{"keys":[]}'
+    discoverable: false
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let jwt_config = auth.as_jwt().unwrap();
+
+		match jwt_config {
+			http::jwt::LocalJwtConfig::Multi { providers, .. } => {
+				assert_eq!(providers.len(), 2);
+				assert_eq!(providers[0].issuer, "https://accounts.google.com");
+				assert_eq!(providers[0].audiences, Some(vec!["mcp-gw".to_owned()]));
+				assert_eq!(providers[1].issuer, "https://burble.example.com");
+				assert_eq!(providers[1].audiences, Some(vec!["mcp-gw".to_owned()]));
+			},
+			_ => panic!("Expected LocalJwtConfig::Multi"),
+		}
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_metadata_provider_uses_discoverable_provider() {
+		let yaml = r#"
+providers:
+  - issuer: "https://headless.example.com"
+    audiences: ["mcp-gw"]
+    jwks: '{"keys":[]}'
+    discoverable: false
+  - issuer: "https://interactive.example.com"
+    audiences: ["mcp-gw"]
+    jwks: '{"keys":[]}'
+    discoverable: true
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let provider = auth.metadata_provider().unwrap();
+
+		assert_eq!(provider.issuer, "https://interactive.example.com");
 	}
 
 	fn make_aws_config() -> crate::aws::AwsBackendConfig {
