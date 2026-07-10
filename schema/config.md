@@ -430,8 +430,8 @@
 |`binds[].listeners[].routes[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
 |`binds[].listeners[].routes[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
@@ -439,9 +439,24 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.descope`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.authentik`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.url`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers`|[]object|Trusted token issuers accepted by MCP authentication.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].provider.auth0`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].provider.keycloak`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].provider.okta`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].provider.descope`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwks.file`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwks.url`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -13862,8 +13877,8 @@
 |`policies[].policy.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
 |`policies[].policy.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`policies[].policy.mcpAuthentication`|object|Authenticate MCP clients.|
-|`policies[].policy.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
-|`policies[].policy.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`policies[].policy.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
+|`policies[].policy.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
 |`policies[].policy.mcpAuthentication.provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
 |`policies[].policy.mcpAuthentication.provider.auth0`|object||
 |`policies[].policy.mcpAuthentication.provider.keycloak`|object||
@@ -13871,9 +13886,24 @@
 |`policies[].policy.mcpAuthentication.provider.descope`|object||
 |`policies[].policy.mcpAuthentication.provider.authentik`|object||
 |`policies[].policy.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
-|`policies[].policy.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
+|`policies[].policy.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
 |`policies[].policy.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.mcpAuthentication.jwks.url`|string||
+|`policies[].policy.mcpAuthentication.providers`|[]object|Trusted token issuers accepted by MCP authentication.|
+|`policies[].policy.mcpAuthentication.providers[].issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
+|`policies[].policy.mcpAuthentication.providers[].audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`policies[].policy.mcpAuthentication.providers[].provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
+|`policies[].policy.mcpAuthentication.providers[].provider.auth0`|object||
+|`policies[].policy.mcpAuthentication.providers[].provider.keycloak`|object||
+|`policies[].policy.mcpAuthentication.providers[].provider.okta`|object||
+|`policies[].policy.mcpAuthentication.providers[].provider.descope`|object||
+|`policies[].policy.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`policies[].policy.mcpAuthentication.providers[].jwks.file`|string||
+|`policies[].policy.mcpAuthentication.providers[].jwks.url`|string||
+|`policies[].policy.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
+|`policies[].policy.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
+|`policies[].policy.mcpAuthentication.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`policies[].policy.mcpAuthentication.providers[].clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`policies[].policy.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`policies[].policy.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -25442,8 +25472,8 @@
 |`routeGroups[].routes[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
 |`routeGroups[].routes[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
-|`routeGroups[].routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
-|`routeGroups[].routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`routeGroups[].routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
+|`routeGroups[].routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
 |`routeGroups[].routes[].policies.mcpAuthentication.provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
@@ -25451,9 +25481,24 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.descope`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.authentik`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
-|`routeGroups[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
+|`routeGroups[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.url`|string||
+|`routeGroups[].routes[].policies.mcpAuthentication.providers`|[]object|Trusted token issuers accepted by MCP authentication.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].provider.auth0`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].provider.keycloak`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].provider.okta`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].provider.descope`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwks.file`|string||
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwks.url`|string||
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`routeGroups[].routes[].policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -56333,8 +56378,8 @@
 |`mcp.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
 |`mcp.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`mcp.policies.mcpAuthentication`|object|Authenticate MCP clients.|
-|`mcp.policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
-|`mcp.policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`mcp.policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
+|`mcp.policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
 |`mcp.policies.mcpAuthentication.provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
 |`mcp.policies.mcpAuthentication.provider.auth0`|object||
 |`mcp.policies.mcpAuthentication.provider.keycloak`|object||
@@ -56342,9 +56387,24 @@
 |`mcp.policies.mcpAuthentication.provider.descope`|object||
 |`mcp.policies.mcpAuthentication.provider.authentik`|object||
 |`mcp.policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
-|`mcp.policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
+|`mcp.policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
 |`mcp.policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.mcpAuthentication.jwks.url`|string||
+|`mcp.policies.mcpAuthentication.providers`|[]object|Trusted token issuers accepted by MCP authentication.|
+|`mcp.policies.mcpAuthentication.providers[].issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
+|`mcp.policies.mcpAuthentication.providers[].audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`mcp.policies.mcpAuthentication.providers[].provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
+|`mcp.policies.mcpAuthentication.providers[].provider.auth0`|object||
+|`mcp.policies.mcpAuthentication.providers[].provider.keycloak`|object||
+|`mcp.policies.mcpAuthentication.providers[].provider.okta`|object||
+|`mcp.policies.mcpAuthentication.providers[].provider.descope`|object||
+|`mcp.policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`mcp.policies.mcpAuthentication.providers[].jwks.file`|string||
+|`mcp.policies.mcpAuthentication.providers[].jwks.url`|string||
+|`mcp.policies.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
+|`mcp.policies.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
+|`mcp.policies.mcpAuthentication.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`mcp.policies.mcpAuthentication.providers[].clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`mcp.policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`mcp.policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|

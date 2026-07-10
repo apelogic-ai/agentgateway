@@ -1007,7 +1007,6 @@ type AuthorizationCookieLocation struct {
 	Name string `json:"name"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!has(self.mcp) || size(self.providers) == 1",message="jwtAuthentication.mcp requires exactly one provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.mcp) || !has(self.mode) || self.mode == 'Strict'",message="jwtAuthentication.mcp requires mode Strict"
 type JWTAuthentication struct {
 	// Validation mode for JWT authentication.

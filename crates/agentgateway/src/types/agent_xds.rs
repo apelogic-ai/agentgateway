@@ -2074,11 +2074,10 @@ fn traffic_policy_from_proto(
 			);
 			let mcp = match &jwt.mcp {
 				Some(mcp) => {
-					if jwt.providers.len() != 1 {
-						return Err(ProtoError::Generic(format!(
-							"JWT MCP extension requires exactly one provider, found {}",
-							jwt.providers.len()
-						)));
+					if jwt.providers.is_empty() {
+						return Err(ProtoError::Generic(
+							"JWT MCP extension requires at least one provider".to_string(),
+						));
 					}
 					let provider = &jwt.providers[0];
 					Some(build_mcp_authentication(
@@ -3868,6 +3867,57 @@ mod tests {
 			jwt.validate_claims(&build_unsigned_token("kid")),
 			Err(TokenError::UnknownKeyId(kid)) if kid == "kid"
 		));
+		Ok(())
+	}
+
+	#[test]
+	fn test_traffic_jwt_mcp_accepts_multiple_providers_and_uses_first_for_metadata()
+	-> Result<(), ProtoError> {
+		use proto::agent::traffic_policy_spec as tps;
+
+		let spec = proto::agent::TrafficPolicySpec {
+			phase: tps::PolicyPhase::Route as i32,
+			kind: Some(tps::Kind::Jwt(tps::Jwt {
+				mode: tps::jwt::Mode::Strict as i32,
+				providers: vec![
+					tps::JwtProvider {
+						issuer: "https://interactive.example.com".to_string(),
+						audiences: vec!["mcp-gw".to_string()],
+						jwks_source: Some(tps::jwt_provider::JwksSource::Inline(
+							r#"{"keys":[]}"#.to_string(),
+						)),
+						..Default::default()
+					},
+					tps::JwtProvider {
+						issuer: "https://headless.example.com".to_string(),
+						audiences: vec!["mcp-gw".to_string()],
+						jwks_source: Some(tps::jwt_provider::JwksSource::Inline(
+							r#"{"keys":[]}"#.to_string(),
+						)),
+						..Default::default()
+					},
+				],
+				mcp: Some(tps::jwt::Mcp::default()),
+				..Default::default()
+			})),
+		};
+
+		let mut diagnostics = Diagnostics::default();
+		let policy = traffic_policy_from_proto(&spec, &mut diagnostics)?;
+
+		let TrafficPolicy::JwtAuth(policy) = policy else {
+			panic!("expected JWT auth policy");
+		};
+		let mcp = policy
+			.iter()
+			.next()
+			.expect("expected single JWT policy")
+			.pol
+			.mcp
+			.as_ref()
+			.expect("expected MCP auth extension");
+		assert_eq!(mcp.issuer, "https://interactive.example.com");
+		assert_eq!(mcp.audiences, vec!["mcp-gw".to_string()]);
 		Ok(())
 	}
 

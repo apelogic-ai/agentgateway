@@ -4043,12 +4043,18 @@
       "type": "object",
       "properties": {
         "issuer": {
-          "description": "Expected token issuer, matched against the JWT `iss` claim.",
-          "type": "string"
+          "description": "Expected token issuer, matched against the JWT `iss` claim.\n\nDeprecated for new multi-provider MCP auth config. Use `providers` instead.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "audiences": {
-          "description": "Accepted token audiences, matched against the JWT `aud` claim.",
-          "type": "array",
+          "description": "Accepted token audiences, matched against the JWT `aud` claim.\n\nDeprecated for new multi-provider MCP auth config. Use `providers` instead.",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "type": "string"
           }
@@ -4069,7 +4075,7 @@
           "$ref": "#/$defs/ResourceMetadata"
         },
         "jwks": {
-          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.\nIf omitted, the JWKS URL is derived from the issuer and provider.",
+          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.\nIf omitted, the JWKS URL is derived from the issuer and provider.\n\nDeprecated for new multi-provider MCP auth config. Use `providers` instead.",
           "anyOf": [
             {
               "$ref": "#/$defs/FileInlineOrRemote"
@@ -4078,6 +4084,13 @@
               "type": "null"
             }
           ]
+        },
+        "providers": {
+          "description": "Trusted token issuers accepted by MCP authentication.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalMcpAuthenticationProvider"
+          }
         },
         "mode": {
           "description": "Controls whether MCP requests must include a valid JWT.",
@@ -4108,8 +4121,6 @@
       },
       "additionalProperties": false,
       "required": [
-        "issuer",
-        "audiences",
         "resourceMetadata"
       ]
     },
@@ -4216,23 +4227,57 @@
         }
       ]
     },
-    "McpAuthenticationMode": {
-      "oneOf": [
-        {
-          "description": "A valid token, issued by a configured issuer, must be present.\nThis is the default option.",
-          "type": "string",
-          "const": "strict"
+    "LocalMcpAuthenticationProvider": {
+      "type": "object",
+      "properties": {
+        "issuer": {
+          "description": "Expected token issuer, matched against the JWT `iss` claim.",
+          "type": "string"
         },
-        {
-          "description": "If a token exists, validate it.\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
-          "type": "string",
-          "const": "optional"
+        "audiences": {
+          "description": "Accepted token audiences, matched against the JWT `aud` claim.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
-        {
-          "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
-          "type": "string",
-          "const": "permissive"
+        "provider": {
+          "description": "Identity provider type used to derive MCP authorization metadata and default JWKS URLs.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpIDP"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jwks": {
+          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
+          "$ref": "#/$defs/FileInlineOrRemote"
+        },
+        "discoverable": {
+          "description": "Whether this provider should be used when deriving MCP protected-resource metadata.",
+          "type": "boolean",
+          "default": true
+        },
+        "jwtValidationOptions": {
+          "description": "Claim requirements to enforce after the token signature is verified.",
+          "$ref": "#/$defs/JWTValidationOptions"
+        },
+        "clientId": {
+          "description": "OAuth client ID advertised to MCP clients when needed.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
+      },
+      "additionalProperties": false,
+      "required": [
+        "issuer",
+        "audiences",
+        "jwks"
       ]
     },
     "JWTValidationOptions": {
@@ -4252,6 +4297,25 @@
         }
       },
       "additionalProperties": false
+    },
+    "McpAuthenticationMode": {
+      "oneOf": [
+        {
+          "description": "A valid token, issued by a configured issuer, must be present.\nThis is the default option.",
+          "type": "string",
+          "const": "strict"
+        },
+        {
+          "description": "If a token exists, validate it.\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
+          "type": "string",
+          "const": "optional"
+        },
+        {
+          "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
+          "type": "string",
+          "const": "permissive"
+        }
+      ]
     },
     "A2aPolicy": {
       "type": "object",

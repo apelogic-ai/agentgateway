@@ -69,6 +69,52 @@ func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorOmitsRemoteProvider
 	}
 }
 
+func TestProcessJWTAuthenticationPolicyAllowsMCPWithMultipleProviders(t *testing.T) {
+	inlineJWKS := `{"keys":[]}`
+	jwtAuth := &agentgateway.JWTAuthentication{
+		Mode: agentgateway.JWTAuthenticationModeStrict,
+		Providers: []agentgateway.JWTProvider{
+			{
+				Issuer:    "https://interactive.example.com",
+				Audiences: []string{"mcp-gw"},
+				JWKS: agentgateway.JWKS{
+					Inline: &inlineJWKS,
+				},
+			},
+			{
+				Issuer:    "https://headless.example.com",
+				Audiences: []string{"mcp-gw"},
+				JWKS: agentgateway.JWKS{
+					Inline: &inlineJWKS,
+				},
+			},
+		},
+		MCP: &agentgateway.JWTMCPConfig{},
+	}
+
+	policy, err := processJWTAuthenticationPolicy(
+		PolicyCtx{
+			Krt:        krt.TestingDummyContext{},
+			JWKSLookup: stubJWKSLookup{},
+		},
+		jwtAuth,
+		nil,
+		"default/test:jwt",
+		types.NamespacedName{Namespace: "default", Name: "test"},
+	)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	jwtSpec := policy.GetTraffic().GetJwt()
+	if got := len(jwtSpec.Providers); got != 2 {
+		t.Fatalf("expected two providers, got %d", got)
+	}
+	if jwtSpec.Mcp == nil {
+		t.Fatal("expected MCP extension")
+	}
+}
+
 func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorLeavesInlineEmptyAndReturnsError(t *testing.T) {
 	sentinel := errors.New("lookup failed")
 	authn := &agentgateway.MCPAuthentication{
