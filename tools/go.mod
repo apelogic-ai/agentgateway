@@ -1,6 +1,6 @@
 module github.com/agentgateway/agentgateway/tools
 
-go 1.26.0
+go 1.26.4
 
 tool (
 	github.com/agentgateway/agentgateway/tools/cmd/oss_compliance

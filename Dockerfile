@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.11
 ARG BUILDER=base
 
-FROM docker.io/library/node:23.11.0-bookworm AS node
+FROM docker.io/library/node:23.11.0-bookworm@sha256:ee8a0bc5bbaece0c538c76e7c20fde6d4db319bbd5d4e423940999f16da89aa1 AS node
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/app/npm/cache npm install
 
 RUN --mount=type=cache,target=/app/npm/cache npm run build
 
-FROM docker.io/library/rust:1.96.1-trixie AS musl-builder
+FROM docker.io/library/rust:1.96.1-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376 AS musl-builder
 
 ARG TARGETARCH
 
@@ -34,7 +34,7 @@ else
 fi
 EOF
 
-FROM docker.io/library/rust:1.96.1-trixie AS base-builder
+FROM docker.io/library/rust:1.96.1-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376 AS base-builder
 
 ARG TARGETARCH
 
@@ -93,7 +93,7 @@ if /out/agentgateway --version | grep -q '"unknown"'; then
 fi
 EOF
 
-FROM cgr.dev/chainguard/glibc-dynamic AS runner
+FROM cgr.dev/chainguard/glibc-dynamic@sha256:7ff79e2caef2b8a137ddaf9940fb790e91148482092363760d6661e4591fd54c AS runner
 
 ARG TARGETARCH
 
