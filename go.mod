@@ -1,6 +1,6 @@
 module github.com/agentgateway/agentgateway
 
-go 1.26.4
+go 1.26.0
 
 replace github.com/agentgateway/agentgateway/api => ./api
 
@@ -9,7 +9,7 @@ require (
 	github.com/agentgateway/agentgateway/api v0.0.0
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2
-	github.com/envoyproxy/go-control-plane/envoy v1.37.1-0.20260704201305-e0b6b8bc5462
+	github.com/envoyproxy/go-control-plane/envoy v1.37.1-0.20260627225610-70ff85c381ff
 	github.com/gdamore/tcell/v2 v2.13.10
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/go-jose/go-jose/v4 v4.1.4
@@ -44,9 +44,9 @@ require (
 	google.golang.org/grpc v1.82.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	helm.sh/helm/v4 v4.2.2
-	istio.io/api v1.30.0-alpha.1.0.20260707182225-a5e37fdd9dc0
+	istio.io/api v1.30.0-alpha.1.0.20260626010135-ac56ebb29e59
 	istio.io/client-go v1.30.0-beta.0
-	istio.io/istio v0.0.0-20260709151527-f771c5b30568
+	istio.io/istio v0.0.0-20260704181517-116e8ec30db4
 	k8s.io/api v0.36.2
 	k8s.io/apiextensions-apiserver v0.36.2
 	k8s.io/apimachinery v0.36.2
@@ -90,7 +90,7 @@ require (
 	github.com/dylibso/observe-sdk/go v0.0.0-20240819160327-2d926c5d788a // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
-	github.com/envoyproxy/go-control-plane/contrib v1.36.1-0.20260704201305-e0b6b8bc5462 // indirect
+	github.com/envoyproxy/go-control-plane/contrib v1.36.1-0.20260627225610-70ff85c381ff // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
 	github.com/evanphx/json-patch v5.9.11+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
