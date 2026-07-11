@@ -6,7 +6,10 @@ import (
 )
 
 func TestExecuteRequestRejectsMetadataServiceTargets(t *testing.T) {
-	_, err := ExecuteRequest(WithHost("169.254.169.254"), WithPath("latest/meta-data"))
+	resp, err := ExecuteRequest(WithHost("169.254.169.254"), WithPath("latest/meta-data"))
+	if resp != nil {
+		t.Cleanup(func() { _ = resp.Body.Close() })
+	}
 	if err == nil {
 		t.Fatal("expected metadata service target to be rejected")
 	}
@@ -16,7 +19,10 @@ func TestExecuteRequestRejectsMetadataServiceTargets(t *testing.T) {
 }
 
 func TestExecuteRequestRejectsUnsupportedScheme(t *testing.T) {
-	_, err := ExecuteRequest(WithScheme("file"), WithHost("example.com"))
+	resp, err := ExecuteRequest(WithScheme("file"), WithHost("example.com"))
+	if resp != nil {
+		t.Cleanup(func() { _ = resp.Body.Close() })
+	}
 	if err == nil {
 		t.Fatal("expected unsupported scheme to be rejected")
 	}
