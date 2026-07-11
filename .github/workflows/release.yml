@@ -54,15 +54,20 @@ jobs:
     steps:
       # Help debug what exact was input for this since Github doesn't expose it.
       - name: Output Inputs
-        run: echo "${{ toJSON(github.event.inputs) }}"
+        env:
+          GITHUB_EVENT_INPUTS_JSON: ${{ toJSON(github.event.inputs) }}
+        run: printf '%s\n' "$GITHUB_EVENT_INPUTS_JSON"
       - name: Set canonical VERSION
         id: version
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           # Determine version source
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
+          if [ -n "$VERSION_INPUT" ]; then
+            VERSION="$VERSION_INPUT"
           else
-            VERSION="${{ github.ref_name }}"
+            VERSION="$REF_NAME"
           fi
           # Always strip 'v' prefix if present
           VERSION="${VERSION#v}"
@@ -195,7 +200,9 @@ jobs:
 
       - name: Sign the extra tag
         if: ${{ inputs.extra_tag != '' }}
-        run: cosign sign --yes ${{ env.REGISTRY_IMAGE }}:${{ inputs.extra_tag }}
+        env:
+          EXTRA_TAG: ${{ inputs.extra_tag }}
+        run: cosign sign --yes "${REGISTRY_IMAGE}:${EXTRA_TAG}"
 
       - name: Inspect image
         run: |
@@ -329,7 +336,9 @@ jobs:
 
       - name: Sign the extra tag
         if: ${{ inputs.extra_tag != '' }}
-        run: cosign sign --yes ${{ env.REGISTRY_IMAGE }}:${{ inputs.extra_tag }}-musl
+        env:
+          EXTRA_TAG: ${{ inputs.extra_tag }}
+        run: cosign sign --yes "${REGISTRY_IMAGE}:${EXTRA_TAG}-musl"
 
       - name: Inspect image
         run: |
@@ -492,7 +501,9 @@ jobs:
 
       - name: Sign the extra tag
         if: ${{ inputs.extra_tag != '' }}
-        run: cosign sign --yes ${{ env.CONTROLLER_REGISTRY_IMAGE }}:${{ inputs.extra_tag }}
+        env:
+          EXTRA_TAG: ${{ inputs.extra_tag }}
+        run: cosign sign --yes "${CONTROLLER_REGISTRY_IMAGE}:${EXTRA_TAG}"
 
       - name: Attach VEX attestation
         run: |

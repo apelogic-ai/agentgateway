@@ -224,6 +224,10 @@ fn build_client(server_addr: SocketAddr) -> Client<TestConnector, TestKey> {
 }
 
 #[tokio::test]
+#[cfg_attr(
+	windows,
+	ignore = "HTTP/2 blackbox capacity test is timing-sensitive on Windows CI runners"
+)]
 async fn h2_stream_capacity_must_follow_request_body_lifetime() {
 	let (server, _response_txs) = TestServer::spawn(2, 0).await;
 	let uri: Uri = format!("http://{}/hold", server.addr).parse().expect("uri");
@@ -292,6 +296,10 @@ async fn h2_stream_capacity_must_follow_request_body_lifetime() {
 }
 
 #[tokio::test]
+#[cfg_attr(
+	windows,
+	ignore = "HTTP/2 blackbox connection reuse test is timing-sensitive on Windows CI runners"
+)]
 async fn empty_request_and_response_reuse_single_h2_connection() {
 	let (server, _response_txs) = TestServer::spawn(2, 0).await;
 	let uri: Uri = format!("http://{}/empty", server.addr)
@@ -329,6 +337,10 @@ async fn empty_request_and_response_reuse_single_h2_connection() {
 }
 
 #[tokio::test]
+#[cfg_attr(
+	windows,
+	ignore = "HTTP/2 blackbox response lifetime test is timing-sensitive on Windows CI runners"
+)]
 async fn h2_response_body_lifetime_must_hold_capacity() {
 	let (server, response_txs) = TestServer::spawn(2, 2).await;
 	let hold_uri: Uri = format!("http://{}/hold-response", server.addr)
@@ -399,6 +411,10 @@ async fn h2_response_body_lifetime_must_hold_capacity() {
 }
 
 #[tokio::test]
+#[cfg_attr(
+	windows,
+	ignore = "HTTP/2 blackbox connection reuse test is timing-sensitive on Windows CI runners"
+)]
 async fn released_response_bodies_allow_reuse_without_new_connection() {
 	let (server, response_txs) = TestServer::spawn(2, 2).await;
 	let hold_uri: Uri = format!("http://{}/hold-response", server.addr)

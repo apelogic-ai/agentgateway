@@ -1,7 +1,7 @@
 # Windows-native Dockerfile for agentgateway
 
 # Use Windows Server Core as the base for building
-FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS builder
+FROM mcr.microsoft.com/windows/servercore:ltsc2022@sha256:a23b350061d76236e2c427e32175a2decfe3214200eee4ae9ee9cd9e98f26bf0 AS builder
 
 ARG PROFILE=release
 
@@ -39,7 +39,7 @@ RUN $env:TARGET=\"x86_64-pc-windows-msvc\"; \
     Move-Item -Path C:/app/target/x86_64-pc-windows-msvc/release/agentgateway.exe -Destination C:/out/agentgateway.exe
 
 # Final runtime image
-FROM mcr.microsoft.com/windows/nanoserver:ltsc2022 AS runner
+FROM mcr.microsoft.com/windows/nanoserver:ltsc2022@sha256:7644d94e806b07c22d7e276a8cdbcbffac1d02bf3d5170884302d0e9b0a519e9 AS runner
 
 WORKDIR C:/app
 COPY --from=builder C:/out/agentgateway.exe C:/app/agentgateway.exe

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"strings"
 )
 
@@ -34,6 +36,9 @@ func ExecuteRequest(options ...Option) (*http.Response, error) {
 
 func (c *requestConfig) executeNative() (*http.Response, error) {
 	fullURL := c.buildURL()
+	if err := validateNativeRequestTarget(fullURL); err != nil {
+		return nil, err
+	}
 
 	client := &http.Client{
 		Timeout: c.timeout,
@@ -96,4 +101,46 @@ func (c *requestConfig) buildURL() string {
 
 	baseURL := fmt.Sprintf("%s://%s:%d%s", c.scheme, c.host, c.port, path)
 	return baseURL
+}
+
+func validateNativeRequestTarget(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid request URL: %w", err)
+	}
+
+	switch parsed.Scheme {
+	case "http", "https":
+	default:
+		return fmt.Errorf("unsupported request scheme %q", parsed.Scheme)
+	}
+
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	if host == "" {
+		return fmt.Errorf("request host is required")
+	}
+
+	if host == "metadata" || strings.HasSuffix(host, ".metadata") || host == "metadata.google.internal" {
+		return fmt.Errorf("disallowed metadata service target %q", host)
+	}
+
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return nil
+	}
+
+	if isMetadataServiceAddress(addr) {
+		return fmt.Errorf("disallowed metadata service target %q", host)
+	}
+
+	return nil
+}
+
+func isMetadataServiceAddress(addr netip.Addr) bool {
+	if addr.Is4() {
+		metadataPrefix := netip.MustParsePrefix("169.254.169.254/32")
+		return metadataPrefix.Contains(addr)
+	}
+
+	return addr == netip.MustParseAddr("fd00:ec2::254")
 }
