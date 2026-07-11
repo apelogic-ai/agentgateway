@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	"sigs.k8s.io/gateway-api/pkg/features"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
@@ -25,6 +26,14 @@ import (
 )
 
 var scheme = schemes.DefaultScheme()
+
+func TestGetSupportedFeaturesForAgentGatewayExcludesUnsupportedConformanceFeatures(t *testing.T) {
+	for _, feature := range deployer.GetSupportedFeaturesForAgentGateway() {
+		if feature.Name == gwv1.FeatureName(features.SupportGatewayInfrastructurePropagation) {
+			t.Fatalf("unsupported feature %s should not be advertised", feature.Name)
+		}
+	}
+}
 
 func TestDeployObjs(t *testing.T) {
 	t.Helper()
