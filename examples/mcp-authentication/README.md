@@ -2,7 +2,7 @@
 
 This example shows how to protect MCP servers with agentgateway using the MCP Authorization spec.
 
-> Note: The current MCP Authorization spec focuses on authentication; m
+> Note: The current MCP Authorization spec primarily covers authentication and protected resource metadata.
 
 ### Running the example
 
@@ -50,10 +50,15 @@ Taken from `examples/mcp-authentication/config.yaml`:
       - content-type
       allowOrigins:
       - '*'
+      exposeHeaders:
+      - "Mcp-Session-Id"
     mcpAuthentication:
+      mode: strict
       issuer: http://localhost:9000
-      jwksUrl: http://localhost:9000/.well-known/jwks.json
-      audience: http://localhost:3000/stdio/mcp
+      audiences:
+      - http://localhost:3000/stdio/mcp
+      jwks:
+        url: http://localhost:9000/.well-known/jwks.json
       resourceMetadata:
         resource: http://localhost:3000/stdio/mcp
         scopesSupported:
@@ -90,17 +95,20 @@ Also in `examples/mcp-authentication/config.yaml`:
   - path:
       exact: /.well-known/oauth-protected-resource/remote/mcp
   policies:
-    backendTLS: {}
     cors:
       allowHeaders:
       - mcp-protocol-version
       - content-type
       allowOrigins:
       - '*'
+      exposeHeaders:
+      - "Mcp-Session-Id"
     mcpAuthentication:
       issuer: http://localhost:9000
-      jwksUrl: http://localhost:9000/.well-known/jwks.json
-      audience: http://localhost:3000/remote/mcp
+      audiences:
+      - http://localhost:3000/remote/mcp
+      jwks:
+        url: http://localhost:9000/.well-known/jwks.json
       resourceMetadata:
         resource: http://localhost:3000/remote/mcp
         scopesSupported:
@@ -118,7 +126,7 @@ Also in `examples/mcp-authentication/config.yaml`:
 ### Scenario C: Adapting a vendor Authorization Server (e.g., Keycloak)
 
 When your Authorization Server doesn’t implement the spec as-is, agentgateway can fill in the gaps.
-Currently, four providers are supported: Keycloak, Auth0, Okta, and Descope.
+Currently, five providers are supported: Keycloak, Auth0, Okta, Descope, and authentik.
 
 Excerpt from `examples/mcp-authentication/config.yaml`:
 
@@ -136,15 +144,16 @@ Excerpt from `examples/mcp-authentication/config.yaml`:
   - path: { exact: /.well-known/oauth-protected-resource/keycloak/mcp }
   - path: { exact: /.well-known/oauth-authorization-server/keycloak/mcp }
   - path: { exact: /.well-known/oauth-authorization-server/keycloak/mcp/client-registration }
-  - path: { exact: /realms/mcp/protocol/openid-connect/certs }
   policies:
     cors:
       allowHeaders: [mcp-protocol-version, content-type]
       allowOrigins: ['*']
     mcpAuthentication:
       issuer: http://localhost:7080/realms/mcp
-      jwksUrl: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
-      audience: mcp_proxy
+      audiences:
+      - mcp_proxy
+      jwks:
+        url: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
       provider:
         keycloak: {}
       resourceMetadata:
@@ -166,6 +175,7 @@ What setting a provider does (high level):
   - Keycloak → `<issuer>/protocol/openid-connect/certs`
   - Okta → `<issuer>/.well-known/jwks.json`
   - Descope → `https://api.descope.com/{project-id}/.well-known/jwks.json` (derived from agentic issuer path)
+  - authentik → `<issuer>/jwks/`
 
 Auth0-specific notes:
 - Gateway appends `?audience=...` to the authorization endpoint it exposes.
@@ -179,6 +189,12 @@ Okta-specific notes:
 - No RFC 8707 support; gateway appends `?audience=...` to the authorization endpoint (same workaround as Auth0).
 - Client registration is proxied by the gateway at `.../client-registration` to forward to Okta’s `oauth2/v1/clients`.
 - Okta DCR requires an SSWS API token; the gateway proxies the request and the MCP client must provide the token.
+
+authentik-specific notes:
+- Uses OIDC discovery (`{issuer}/.well-known/openid-configuration`), not RFC 8414. The issuer is per-application: `https://<host>/application/o/<app-slug>/`.
+- No RFC 8707 support, and no audience query parameter workaround. authentik sets `aud` to the OAuth client ID, so configure `audiences` with the pre-registered client ID.
+- No Dynamic Client Registration support ([goauthentik/authentik#8751](https://github.com/goauthentik/authentik/issues/8751)). **Setting `clientId` is required**: the gateway injects a `registration_endpoint` into the AS metadata it exposes and answers registration requests itself with the pre-registered client.
+- The pre-registered authentik client must be a **public** client (the mock registration response advertises `token_endpoint_auth_method: none`) with PKCE, and its redirect URIs must cover your MCP clients (authentik supports regex redirect URIs).
 
 Descope-specific notes:
 - Uses OIDC discovery (`{issuer}/.well-known/openid-configuration`), not RFC 8414.

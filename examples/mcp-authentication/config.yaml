@@ -160,7 +160,8 @@ binds:
             #       issuer: https://dev-y6sikgx3n3shy7ci.eu.auth0.com
             #       audiences:
             #       - urn:agent-gateway
-            #       jwksUrl: https://dev-y6sikgx3n3shy7ci.eu.auth0.com/.well-known/jwks.json
+            #       jwks:
+            #         url: https://dev-y6sikgx3n3shy7ci.eu.auth0.com/.well-known/jwks.json
             #       provider:
             #         auth0: {}
             #       resourceMetadata:
@@ -204,7 +205,8 @@ binds:
             #       issuer: https://dev-123456.okta.com/oauth2/default
             #       audiences:
             #       - api://default
-            #       jwksUrl: https://dev-123456.okta.com/oauth2/default/.well-known/jwks.json
+            #       jwks:
+            #         url: https://dev-123456.okta.com/oauth2/default/.well-known/jwks.json
             #       provider:
             #         okta: {}
             #       resourceMetadata:
@@ -261,5 +263,50 @@ binds:
             #         - header
             #         resourceDocumentation: http://localhost:3000/descope/docs
             #         resourcePolicyUri: http://localhost:3000/descope/policies
+            # Example configuration for authentik:
+            # - backends:
+            #   - mcp:
+            #       targets:
+            #       - name: everything
+            #         stdio:
+            #           args:
+            #           - '@modelcontextprotocol/server-everything'
+            #           cmd: npx
+            #   matches:
+            #   - path:
+            #       exact: /authentik/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-protected-resource/authentik/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/authentik/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/authentik/mcp/client-registration
+            #   policies:
+            #     cors:
+            #       allowHeaders:
+            #       - mcp-protocol-version
+            #       - content-type
+            #       allowOrigins:
+            #       - '*'
+            #     mcpAuthentication:
+            #       issuer: https://authentik.example.com/application/o/<app-slug>/
+            #       audiences:
+            #       # authentik sets `aud` to the OAuth client ID
+            #       - <pre-registered-client-id>
+            #       provider:
+            #         authentik: {}
+            #       # clientId is required — authentik does not support DCR, so the gateway
+            #       # answers registration requests with this pre-registered public client
+            #       clientId: <pre-registered-client-id>
+            #       resourceMetadata:
+            #         resource: http://localhost:3000/authentik/mcp
+            #         scopesSupported:
+            #         - openid
+            #         - profile
+            #         - offline_access
+            #         bearerMethodsSupported:
+            #         - header
+            #         resourceDocumentation: http://localhost:3000/authentik/docs
+            #         resourcePolicyUri: http://localhost:3000/authentik/policies
   # Public port to listen on
   port: 3000

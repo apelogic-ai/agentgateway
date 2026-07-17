@@ -348,6 +348,9 @@ pub enum MessageType {
 		kind: String,
 		details: PolicyEventDetails,
 	},
+	TraceSampling {
+		decision: String,
+	},
 	AuthorizationResult {
 		rules: Vec<AuthorizationRuleResult>,
 		result: AuthorizationResult,
@@ -399,7 +402,8 @@ impl MessageType {
 			| MessageType::LlmRequestDetected { .. }
 			| MessageType::LlmStreamingTranslation { .. }
 			| MessageType::Policy { .. }
-			| MessageType::PolicyEvent { .. } => Severity::Info,
+			| MessageType::PolicyEvent { .. }
+			| MessageType::TraceSampling { .. } => Severity::Info,
 
 			MessageType::AuthorizationResult {
 				result: AuthorizationResult::Allow,
@@ -487,7 +491,6 @@ pub struct TraceReceiver {
 }
 
 impl TraceReceiver {
-	#[cfg(test)]
 	pub async fn recv(&mut self) -> Option<Message> {
 		self.receiver.recv().await
 	}
@@ -714,6 +717,11 @@ impl DebugTracer {
 			},
 		)
 	}
+	pub fn trace_sampling(&self, decision: &str) {
+		self.send(MessageType::TraceSampling {
+			decision: decision.to_owned(),
+		})
+	}
 	pub fn authorization_result(
 		&self,
 		rules: Vec<AuthorizationRuleResult>,
@@ -824,9 +832,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn cel_eval_emits_events_while_debug_trace_is_active() {
-		let mut trace_rx = track_expression(None);
+		// Scope the watcher to a unique path so concurrent tests can't consume its one-shot sender.
+		const PATH: &str = "/cel-eval-emits-events-probe";
+		let mut trace_rx = track_expression(Some(
+			Expression::new_strict(format!("request.path == '{PATH}'")).expect("filter compiles"),
+		));
 		let req = http::Request::builder()
-			.uri("http://example.com/test")
+			.uri(format!("http://example.com{PATH}"))
 			.body(Body::empty())
 			.expect("request should build");
 		let expr = Expression::new_strict("request.path").expect("expression should compile");
@@ -834,7 +846,7 @@ mod tests {
 		DebugTracer::maybe_scope(req, |req| async move {
 			let executor = Executor::new_request(&req);
 			let value = executor.eval(&expr).expect("expression should evaluate");
-			assert_eq!(value.as_str().unwrap(), "/test");
+			assert_eq!(value.as_str().unwrap(), PATH);
 		})
 		.await;
 
@@ -842,7 +854,7 @@ mod tests {
 			while let Some(msg) = trace_rx.recv().await {
 				if let MessageType::Cel { expr, result, .. } = msg.message {
 					assert_eq!(expr, "request.path");
-					assert_eq!(result, serde_json::json!("/test"));
+					assert_eq!(result, serde_json::json!(PATH));
 					return;
 				}
 			}
