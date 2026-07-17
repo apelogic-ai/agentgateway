@@ -4253,8 +4253,15 @@
           ]
         },
         "jwks": {
-          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
-          "$ref": "#/$defs/FileInlineOrRemote"
+          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.\nIf omitted, the JWKS URL is derived from the issuer and provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "discoverable": {
           "description": "Whether this provider should be used when deriving MCP protected-resource metadata.",
@@ -4276,8 +4283,7 @@
       "additionalProperties": false,
       "required": [
         "issuer",
-        "audiences",
-        "jwks"
+        "audiences"
       ]
     },
     "JWTValidationOptions": {

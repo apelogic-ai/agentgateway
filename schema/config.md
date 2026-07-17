@@ -450,8 +450,9 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].provider.keycloak`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].provider.okta`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].provider.descope`|object||
-|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwks.file`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].provider.authentik`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwks.url`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
@@ -13897,8 +13898,9 @@
 |`policies[].policy.mcpAuthentication.providers[].provider.keycloak`|object||
 |`policies[].policy.mcpAuthentication.providers[].provider.okta`|object||
 |`policies[].policy.mcpAuthentication.providers[].provider.descope`|object||
-|`policies[].policy.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
-|`policies[].policy.mcpAuthentication.providers[].jwks.file`|string||
+|`policies[].policy.mcpAuthentication.providers[].provider.authentik`|object||
+|`policies[].policy.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
+|`policies[].policy.mcpAuthentication.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.mcpAuthentication.providers[].jwks.url`|string||
 |`policies[].policy.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
 |`policies[].policy.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
@@ -25492,8 +25494,9 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].provider.keycloak`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].provider.okta`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].provider.descope`|object||
-|`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
-|`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwks.file`|string||
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].provider.authentik`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwks.url`|string||
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
@@ -39226,8 +39229,8 @@
 |`routes[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
 |`routes[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routes[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
-|`routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
-|`routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
+|`routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
 |`routes[].policies.mcpAuthentication.provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
 |`routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`routes[].policies.mcpAuthentication.provider.keycloak`|object||
@@ -39235,9 +39238,25 @@
 |`routes[].policies.mcpAuthentication.provider.descope`|object||
 |`routes[].policies.mcpAuthentication.provider.authentik`|object||
 |`routes[].policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
-|`routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
+|`routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.<br><br>Deprecated for new multi-provider MCP auth config. Use `providers` instead.|
 |`routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.mcpAuthentication.jwks.url`|string||
+|`routes[].policies.mcpAuthentication.providers`|[]object|Trusted token issuers accepted by MCP authentication.|
+|`routes[].policies.mcpAuthentication.providers[].issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
+|`routes[].policies.mcpAuthentication.providers[].audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`routes[].policies.mcpAuthentication.providers[].provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
+|`routes[].policies.mcpAuthentication.providers[].provider.auth0`|object||
+|`routes[].policies.mcpAuthentication.providers[].provider.keycloak`|object||
+|`routes[].policies.mcpAuthentication.providers[].provider.okta`|object||
+|`routes[].policies.mcpAuthentication.providers[].provider.descope`|object||
+|`routes[].policies.mcpAuthentication.providers[].provider.authentik`|object||
+|`routes[].policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
+|`routes[].policies.mcpAuthentication.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.mcpAuthentication.providers[].jwks.url`|string||
+|`routes[].policies.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
+|`routes[].policies.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
+|`routes[].policies.mcpAuthentication.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`routes[].policies.mcpAuthentication.providers[].clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`routes[].policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routes[].policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routes[].policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -56398,8 +56417,9 @@
 |`mcp.policies.mcpAuthentication.providers[].provider.keycloak`|object||
 |`mcp.policies.mcpAuthentication.providers[].provider.okta`|object||
 |`mcp.policies.mcpAuthentication.providers[].provider.descope`|object||
-|`mcp.policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
-|`mcp.policies.mcpAuthentication.providers[].jwks.file`|string||
+|`mcp.policies.mcpAuthentication.providers[].provider.authentik`|object||
+|`mcp.policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
+|`mcp.policies.mcpAuthentication.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.mcpAuthentication.providers[].jwks.url`|string||
 |`mcp.policies.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
 |`mcp.policies.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
