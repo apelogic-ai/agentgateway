@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	"sigs.k8s.io/gateway-api/pkg/features"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
@@ -78,6 +79,14 @@ func TestGetObjsToDeploy_FormatsGatewayGVKFromKnownType(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), expectedErr.Error()) {
 		t.Fatalf("expected error to contain %q, got %q", expectedErr.Error(), err.Error())
+	}
+}
+
+func TestGetSupportedFeaturesForAgentGatewayExcludesUnsupportedConformanceFeatures(t *testing.T) {
+	for _, feature := range deployer.GetSupportedFeaturesForAgentGateway() {
+		if feature.Name == gwv1.FeatureName(features.SupportGatewayInfrastructurePropagation) {
+			t.Fatalf("unsupported feature %s should not be advertised", feature.Name)
+		}
 	}
 }
 
