@@ -365,7 +365,18 @@ impl ResourceManager {
 		if let Some(content) = self.cached(&resource) {
 			return Ok(content);
 		}
-		let FetchResult { content, next } = self.fetch(&resource).await?;
+		let FetchResult { content, next } = match self.fetch(&resource).await {
+			Ok(result) => result,
+			Err(error) => {
+				if matches!(resource, ResourceRef::Http { .. }) {
+					let _ = self.inner.scheduler_tx.send(ScheduledRefresh {
+						at: Instant::now() + FAILED_HTTP_REFRESH,
+						resource: resource.clone(),
+					});
+				}
+				return Err(error);
+			},
+		};
 		self.store(resource, content.clone(), next);
 		Ok(content)
 	}
