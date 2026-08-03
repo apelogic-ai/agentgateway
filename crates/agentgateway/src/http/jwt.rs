@@ -248,12 +248,12 @@ impl LocalJwtConfig {
 		self,
 		resources: &crate::resource_manager::ResourceFetcher,
 	) -> Result<Jwt, JwkError> {
-		let (mode, authorization_location, providers_cfg) = match self {
+		let (mode, authorization_location, providers_cfg, isolate_provider_failures) = match self {
 			LocalJwtConfig::Multi {
 				mode,
 				location: authorization_location,
 				providers,
-			} => (mode, authorization_location, providers),
+			} => (mode, authorization_location, providers, true),
 			LocalJwtConfig::Single {
 				mode,
 				location: authorization_location,
@@ -270,16 +270,28 @@ impl LocalJwtConfig {
 					jwks,
 					jwt_validation_options,
 				}],
+				false,
 			),
 		};
 
 		let mut providers = Vec::with_capacity(providers_cfg.len());
 		for pc in providers_cfg {
-			let jwks: JwkSet = pc
+			let jwks: JwkSet = match pc
 				.jwks
 				.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
 				.await
-				.map_err(JwkError::JwkLoadError)?;
+			{
+				Ok(jwks) => jwks,
+				Err(error) if isolate_provider_failures => {
+					warn!(
+						issuer = %pc.issuer,
+						%error,
+						"JWT provider unavailable; requests for this issuer will fail closed"
+					);
+					continue;
+				},
+				Err(error) => return Err(JwkError::JwkLoadError(error)),
+			};
 			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
 			providers.push(provider);
 		}

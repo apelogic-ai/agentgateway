@@ -3,7 +3,10 @@ use std::collections::HashSet;
 use itertools::Itertools;
 use serde_json::json;
 
-use super::{JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
+use super::{
+	JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode, Provider, ProviderConfig, TokenError,
+};
+use crate::serdes::FileInlineOrRemote;
 use crate::telemetry::log::MetricsConfig;
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
@@ -133,6 +136,100 @@ fn test_deserialize_rejects_old_validation_options_key() {
 		result.is_err(),
 		"old key 'validationOptions' should be rejected by deny_unknown_fields"
 	);
+}
+
+fn inline_test_jwks() -> FileInlineOrRemote {
+	FileInlineOrRemote::Inline(
+		json!({
+			"keys": [{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "healthy-key",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}]
+		})
+		.to_string(),
+	)
+}
+
+fn unavailable_provider() -> ProviderConfig {
+	ProviderConfig {
+		issuer: "https://unavailable.example.com".into(),
+		audiences: Some(vec!["mcp-gateway".into()]),
+		jwks: FileInlineOrRemote::Remote {
+			url: "https://unavailable.example.com/.well-known/jwks.json"
+				.parse()
+				.unwrap(),
+		},
+		jwt_validation_options: JWTValidationOptions::default(),
+	}
+}
+
+#[tokio::test]
+async fn test_multi_provider_jwks_failure_preserves_healthy_provider() {
+	let config = LocalJwtConfig::Multi {
+		mode: Mode::Strict,
+		location: bearer_location(),
+		providers: vec![
+			unavailable_provider(),
+			ProviderConfig {
+				issuer: "https://healthy.example.com".into(),
+				audiences: Some(vec!["mcp-gateway".into()]),
+				jwks: inline_test_jwks(),
+				jwt_validation_options: JWTValidationOptions::default(),
+			},
+		],
+	};
+
+	let jwt = config
+		.try_into(&crate::resource_manager::ResourceFetcher::files_only())
+		.await
+		.expect("an unavailable issuer must not suppress healthy issuers");
+
+	assert_eq!(jwt.providers.len(), 1);
+	assert_eq!(jwt.providers[0].issuer, "https://healthy.example.com");
+}
+
+#[tokio::test]
+async fn test_multi_provider_all_jwks_failures_remain_fail_closed() {
+	let config = LocalJwtConfig::Multi {
+		mode: Mode::Strict,
+		location: bearer_location(),
+		providers: vec![unavailable_provider()],
+	};
+
+	let jwt = config
+		.try_into(&crate::resource_manager::ResourceFetcher::files_only())
+		.await
+		.expect("multi-provider configuration should remain available");
+
+	assert!(jwt.providers.is_empty());
+	assert!(matches!(
+		jwt.validate_claims("not-a-jwt"),
+		Err(TokenError::InvalidHeader(_))
+	));
+}
+
+#[tokio::test]
+async fn test_single_provider_jwks_failure_remains_fail_fast() {
+	let provider = unavailable_provider();
+	let config = LocalJwtConfig::Single {
+		mode: Mode::Strict,
+		location: bearer_location(),
+		issuer: provider.issuer,
+		audiences: provider.audiences,
+		jwks: provider.jwks,
+		jwt_validation_options: provider.jwt_validation_options,
+	};
+
+	let result = config
+		.try_into(&crate::resource_manager::ResourceFetcher::files_only())
+		.await;
+
+	assert!(matches!(result, Err(JwkError::JwkLoadError(_))));
 }
 
 #[test]
