@@ -4263,6 +4263,24 @@
             }
           ]
         },
+        "allowedAlgorithms": {
+          "description": "Signature algorithms accepted for this provider. The list must not be empty.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JWTAlgorithm"
+          }
+        },
+        "introspection": {
+          "description": "Optional online token status check performed after signature and claim validation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntrospectionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "discoverable": {
           "description": "Whether this provider should be used when deriving MCP protected-resource metadata.",
           "type": "boolean",
@@ -4283,7 +4301,40 @@
       "additionalProperties": false,
       "required": [
         "issuer",
-        "audiences"
+        "audiences",
+        "allowedAlgorithms"
+      ]
+    },
+    "JWTAlgorithm": {
+      "type": "string",
+      "enum": [
+        "RS256",
+        "RS384",
+        "RS512",
+        "PS256",
+        "PS384",
+        "PS512",
+        "ES256",
+        "ES384",
+        "EdDSA"
+      ]
+    },
+    "IntrospectionConfig": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "RFC 7662-style introspection endpoint.",
+          "type": "string"
+        },
+        "credentialFile": {
+          "description": "File containing the bearer credential used to authenticate introspection requests.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "url",
+        "credentialFile"
       ]
     },
     "JWTValidationOptions": {
@@ -5653,6 +5704,24 @@
           "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
           "$ref": "#/$defs/FileInlineOrRemote"
         },
+        "allowedAlgorithms": {
+          "description": "Signature algorithms accepted for this provider. The list must not be empty.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JWTAlgorithm"
+          }
+        },
+        "introspection": {
+          "description": "Optional RFC 7662-style online token status check.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntrospectionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "jwtValidationOptions": {
           "description": "Claim requirements to enforce after the token signature is verified.",
           "$ref": "#/$defs/JWTValidationOptions"
@@ -5661,7 +5730,8 @@
       "additionalProperties": false,
       "required": [
         "issuer",
-        "jwks"
+        "jwks",
+        "allowedAlgorithms"
       ]
     },
     "LocalOidcConfig": {

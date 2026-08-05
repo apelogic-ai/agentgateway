@@ -454,6 +454,10 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwks.url`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].introspection`|object|Optional online token status check performed after signature and claim validation.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
@@ -2897,6 +2901,10 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection`|object|Optional RFC 7662-style online token status check.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -11789,6 +11797,10 @@
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks.url`|string||
+|`binds[].listeners[].policies.jwtAuth.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection`|object|Optional RFC 7662-style online token status check.|
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -13902,6 +13914,10 @@
 |`policies[].policy.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`policies[].policy.mcpAuthentication.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.mcpAuthentication.providers[].jwks.url`|string||
+|`policies[].policy.mcpAuthentication.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`policies[].policy.mcpAuthentication.providers[].introspection`|object|Optional online token status check performed after signature and claim validation.|
+|`policies[].policy.mcpAuthentication.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`policies[].policy.mcpAuthentication.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`policies[].policy.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
 |`policies[].policy.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.mcpAuthentication.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
@@ -16345,6 +16361,10 @@
 |`policies[].policy.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`policies[].policy.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.jwtAuth.providers[].jwks.url`|string||
+|`policies[].policy.jwtAuth.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`policies[].policy.jwtAuth.providers[].introspection`|object|Optional RFC 7662-style online token status check.|
+|`policies[].policy.jwtAuth.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`policies[].policy.jwtAuth.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`policies[].policy.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -25498,6 +25518,10 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwks.url`|string||
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].introspection`|object|Optional online token status check performed after signature and claim validation.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`routeGroups[].routes[].policies.mcpAuthentication.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.mcpAuthentication.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
@@ -27941,6 +27965,10 @@
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
+|`routeGroups[].routes[].policies.jwtAuth.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection`|object|Optional RFC 7662-style online token status check.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`routeGroups[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -36809,6 +36837,10 @@
 |`gateways.*.listeners[].jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwks.url`|string||
+|`gateways.*.listeners[].jwtAuth.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`gateways.*.listeners[].jwtAuth.providers[].introspection`|object|Optional RFC 7662-style online token status check.|
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`gateways.*.listeners[].jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -37883,6 +37915,10 @@
 |`gateways.*.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`gateways.*.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.jwtAuth.providers[].jwks.url`|string||
+|`gateways.*.jwtAuth.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`gateways.*.jwtAuth.providers[].introspection`|object|Optional RFC 7662-style online token status check.|
+|`gateways.*.jwtAuth.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`gateways.*.jwtAuth.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`gateways.*.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -39253,6 +39289,10 @@
 |`routes[].policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`routes[].policies.mcpAuthentication.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.mcpAuthentication.providers[].jwks.url`|string||
+|`routes[].policies.mcpAuthentication.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`routes[].policies.mcpAuthentication.providers[].introspection`|object|Optional online token status check performed after signature and claim validation.|
+|`routes[].policies.mcpAuthentication.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`routes[].policies.mcpAuthentication.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`routes[].policies.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
 |`routes[].policies.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.mcpAuthentication.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
@@ -41696,6 +41736,10 @@
 |`routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.jwtAuth.providers[].jwks.url`|string||
+|`routes[].policies.jwtAuth.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`routes[].policies.jwtAuth.providers[].introspection`|object|Optional RFC 7662-style online token status check.|
+|`routes[].policies.jwtAuth.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`routes[].policies.jwtAuth.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`routes[].policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -52991,6 +53035,10 @@
 |`llm.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`llm.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`llm.policies.jwtAuth.providers[].jwks.url`|string||
+|`llm.policies.jwtAuth.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`llm.policies.jwtAuth.providers[].introspection`|object|Optional RFC 7662-style online token status check.|
+|`llm.policies.jwtAuth.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`llm.policies.jwtAuth.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`llm.policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -56421,6 +56469,10 @@
 |`mcp.policies.mcpAuthentication.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`mcp.policies.mcpAuthentication.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.mcpAuthentication.providers[].jwks.url`|string||
+|`mcp.policies.mcpAuthentication.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`mcp.policies.mcpAuthentication.providers[].introspection`|object|Optional online token status check performed after signature and claim validation.|
+|`mcp.policies.mcpAuthentication.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`mcp.policies.mcpAuthentication.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`mcp.policies.mcpAuthentication.providers[].discoverable`|boolean|Whether this provider should be used when deriving MCP protected-resource metadata.|
 |`mcp.policies.mcpAuthentication.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.mcpAuthentication.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
@@ -58864,6 +58916,10 @@
 |`mcp.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`mcp.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.jwtAuth.providers[].jwks.url`|string||
+|`mcp.policies.jwtAuth.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`mcp.policies.jwtAuth.providers[].introspection`|object|Optional RFC 7662-style online token status check.|
+|`mcp.policies.jwtAuth.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`mcp.policies.jwtAuth.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -59958,6 +60014,10 @@
 |`ui.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`ui.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`ui.policies.jwtAuth.providers[].jwks.url`|string||
+|`ui.policies.jwtAuth.providers[].allowedAlgorithms`|[]enum|Signature algorithms accepted for this provider. The list must not be empty.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `EdDSA`.|
+|`ui.policies.jwtAuth.providers[].introspection`|object|Optional RFC 7662-style online token status check.|
+|`ui.policies.jwtAuth.providers[].introspection.url`|string|RFC 7662-style introspection endpoint.|
+|`ui.policies.jwtAuth.providers[].introspection.credentialFile`|string|File containing the bearer credential used to authenticate introspection requests.|
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`ui.policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|

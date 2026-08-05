@@ -1,11 +1,13 @@
 // Inspired by https://github.com/cdriehuys/axum-jwks/blob/main/axum-jwks/src/jwks.rs (MIT license)
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 
 use ::cel::types::dynamic::DynamicType;
 use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, JwkSet, KeyAlgorithm};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Map, Value};
 
 use crate::http::Request;
@@ -39,6 +41,12 @@ pub enum TokenError {
 
 	#[error("failed to strip validated credentials from the request: {0}")]
 	CredentialRemoval(String),
+
+	#[error("token introspection is unavailable: {0}")]
+	IntrospectionUnavailable(String),
+
+	#[error("token is inactive")]
+	Inactive,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -79,6 +87,7 @@ pub struct Jwt {
 pub struct Provider {
 	issuer: String,
 	keys: HashMap<String, Jwk>,
+	introspection: Option<IntrospectionConfig>,
 }
 
 // TODO: can we give anything useful here?
@@ -171,9 +180,75 @@ pub struct ProviderConfig {
 	pub audiences: Option<Vec<String>>,
 	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
 	pub jwks: serdes::FileInlineOrRemote,
+	/// Signature algorithms accepted for this provider. The list must not be empty.
+	#[serde(deserialize_with = "deserialize_non_empty_algorithms")]
+	pub allowed_algorithms: Vec<JWTAlgorithm>,
+	/// Optional RFC 7662-style online token status check.
+	pub introspection: Option<IntrospectionConfig>,
 	/// Claim requirements to enforce after the token signature is verified.
 	#[serde(default)]
 	pub jwt_validation_options: JWTValidationOptions,
+}
+
+#[apply(schema_enum!)]
+pub enum JWTAlgorithm {
+	#[serde(rename = "RS256")]
+	Rs256,
+	#[serde(rename = "RS384")]
+	Rs384,
+	#[serde(rename = "RS512")]
+	Rs512,
+	#[serde(rename = "PS256")]
+	Ps256,
+	#[serde(rename = "PS384")]
+	Ps384,
+	#[serde(rename = "PS512")]
+	Ps512,
+	#[serde(rename = "ES256")]
+	Es256,
+	#[serde(rename = "ES384")]
+	Es384,
+	#[serde(rename = "EdDSA")]
+	EdDsa,
+}
+
+impl From<JWTAlgorithm> for Algorithm {
+	fn from(value: JWTAlgorithm) -> Self {
+		match value {
+			JWTAlgorithm::Rs256 => Algorithm::RS256,
+			JWTAlgorithm::Rs384 => Algorithm::RS384,
+			JWTAlgorithm::Rs512 => Algorithm::RS512,
+			JWTAlgorithm::Ps256 => Algorithm::PS256,
+			JWTAlgorithm::Ps384 => Algorithm::PS384,
+			JWTAlgorithm::Ps512 => Algorithm::PS512,
+			JWTAlgorithm::Es256 => Algorithm::ES256,
+			JWTAlgorithm::Es384 => Algorithm::ES384,
+			JWTAlgorithm::EdDsa => Algorithm::EdDSA,
+		}
+	}
+}
+
+fn deserialize_non_empty_algorithms<'de, D>(deserializer: D) -> Result<Vec<JWTAlgorithm>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let algorithms = Vec::<JWTAlgorithm>::deserialize(deserializer)?;
+	if algorithms.is_empty() {
+		return Err(serde::de::Error::custom(
+			"allowedAlgorithms must not be empty",
+		));
+	}
+	Ok(algorithms)
+}
+
+#[apply(schema_de!)]
+pub struct IntrospectionConfig {
+	/// RFC 7662-style introspection endpoint.
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub url: url::Url,
+	/// File containing the bearer credential used to authenticate introspection requests.
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub credential_file: PathBuf,
 }
 
 #[apply(schema_enum!)]
@@ -268,6 +343,8 @@ impl LocalJwtConfig {
 					issuer,
 					audiences,
 					jwks,
+					allowed_algorithms: Vec::new(),
+					introspection: None,
 					jwt_validation_options,
 				}],
 				false,
@@ -292,8 +369,25 @@ impl LocalJwtConfig {
 				},
 				Err(error) => return Err(JwkError::JwkLoadError(error)),
 			};
-			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
-			providers.push(provider);
+			let provider = if pc.allowed_algorithms.is_empty() {
+				Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)
+			} else {
+				Provider::from_jwks_with_policy(
+					jwks,
+					pc.issuer,
+					pc.audiences,
+					pc.allowed_algorithms,
+					pc.introspection,
+					pc.jwt_validation_options,
+				)
+			};
+			match provider {
+				Ok(provider) => providers.push(provider),
+				Err(error) if isolate_provider_failures => {
+					warn!(%error, "JWT provider configuration is unusable; requests for this issuer will fail closed");
+				},
+				Err(error) => return Err(error),
+			}
 		}
 		Ok(Jwt {
 			mode,
@@ -310,7 +404,42 @@ impl Provider {
 		audiences: Option<Vec<String>>,
 		jwt_validation_options: JWTValidationOptions,
 	) -> Result<Provider, JwkError> {
+		Self::from_jwks_inner(jwks, issuer, audiences, None, None, jwt_validation_options)
+	}
+
+	pub fn from_jwks_with_policy(
+		jwks: JwkSet,
+		issuer: String,
+		audiences: Option<Vec<String>>,
+		allowed_algorithms: Vec<JWTAlgorithm>,
+		introspection: Option<IntrospectionConfig>,
+		jwt_validation_options: JWTValidationOptions,
+	) -> Result<Provider, JwkError> {
+		Self::from_jwks_inner(
+			jwks,
+			issuer,
+			audiences,
+			Some(allowed_algorithms),
+			introspection,
+			jwt_validation_options,
+		)
+	}
+
+	fn from_jwks_inner(
+		jwks: JwkSet,
+		issuer: String,
+		audiences: Option<Vec<String>>,
+		allowed_algorithms: Option<Vec<JWTAlgorithm>>,
+		introspection: Option<IntrospectionConfig>,
+		jwt_validation_options: JWTValidationOptions,
+	) -> Result<Provider, JwkError> {
 		warn_unsupported_claims(&jwt_validation_options.required_claims);
+		let allowed_algorithms = allowed_algorithms.map(|algorithms| {
+			algorithms
+				.into_iter()
+				.map(Algorithm::from)
+				.collect::<HashSet<_>>()
+		});
 
 		let mut keys = HashMap::new();
 		let to_supported_alg = |key_algorithm: Option<KeyAlgorithm>| match key_algorithm {
@@ -355,7 +484,7 @@ impl Provider {
 					},
 				};
 
-			let supported_algorithms = match to_supported_alg(jwk.common.key_algorithm) {
+			let mut supported_algorithms = match to_supported_alg(jwk.common.key_algorithm) {
 				None => {
 					// If they did not explicitly set the key algorithm, which is optional, then we can infer it
 					// based on the algorithm properties.
@@ -384,6 +513,12 @@ impl Provider {
 					vec![explicit_alg]
 				},
 			};
+			if let Some(allowed_algorithms) = &allowed_algorithms {
+				supported_algorithms.retain(|algorithm| allowed_algorithms.contains(algorithm));
+			}
+			if supported_algorithms.is_empty() {
+				continue;
+			}
 			// The new() requires 1 algorithm, so just pass the first before we override it
 			let mut validation = Validation::new(*supported_algorithms.first().unwrap());
 			validation.algorithms = supported_algorithms;
@@ -409,8 +544,69 @@ impl Provider {
 			);
 		}
 
-		Ok(Provider { issuer, keys })
+		Ok(Provider {
+			issuer,
+			keys,
+			introspection,
+		})
 	}
+
+	async fn introspect(&self, token: &str) -> Result<(), TokenError> {
+		let Some(config) = &self.introspection else {
+			return Ok(());
+		};
+		let credential = tokio::fs::read_to_string(&config.credential_file)
+			.await
+			.map_err(|error| TokenError::IntrospectionUnavailable(error.to_string()))?;
+		let credential = SecretString::new(credential.trim().to_owned().into());
+		if credential.expose_secret().is_empty() {
+			return Err(TokenError::IntrospectionUnavailable(
+				"credential file is empty".to_string(),
+			));
+		}
+
+		let body = serde_urlencoded::to_string([("token", token)])
+			.map_err(|error| TokenError::IntrospectionUnavailable(error.to_string()))?;
+		let client = reqwest::Client::builder()
+			.timeout(Duration::from_secs(5))
+			.build()
+			.map_err(|error| TokenError::IntrospectionUnavailable(error.to_string()))?;
+		let response = client
+			.post(config.url.clone())
+			.header(
+				reqwest::header::AUTHORIZATION,
+				format!("Bearer {}", credential.expose_secret()),
+			)
+			.header(
+				reqwest::header::CONTENT_TYPE,
+				"application/x-www-form-urlencoded",
+			)
+			.body(body)
+			.send()
+			.await
+			.map_err(|error| TokenError::IntrospectionUnavailable(error.to_string()))?;
+		if !response.status().is_success() {
+			return Err(TokenError::IntrospectionUnavailable(format!(
+				"endpoint returned {}",
+				response.status()
+			)));
+		}
+		let body = response
+			.bytes()
+			.await
+			.map_err(|error| TokenError::IntrospectionUnavailable(error.to_string()))?;
+		let response: IntrospectionResponse = serde_json::from_slice(&body)
+			.map_err(|error| TokenError::IntrospectionUnavailable(error.to_string()))?;
+		if !response.active {
+			return Err(TokenError::Inactive);
+		}
+		Ok(())
+	}
+}
+
+#[derive(Deserialize)]
+struct IntrospectionResponse {
+	active: bool,
 }
 
 impl Jwt {
@@ -522,8 +718,8 @@ impl Jwt {
 			);
 			return Ok(());
 		};
-		let claims = match self.validate_claims(&token) {
-			Ok(claims) => claims,
+		let (claims, provider) = match self.validate_claims_with_provider(&token) {
+			Ok(validated) => validated,
 			Err(e) if self.mode == Mode::Permissive => {
 				dtrace::pol_result!(
 					dtrace::Warn,
@@ -541,6 +737,22 @@ impl Jwt {
 				return Err(e);
 			},
 		};
+		if let Err(e) = provider.introspect(&token).await {
+			if self.mode == Mode::Permissive {
+				dtrace::pol_result!(
+					dtrace::Warn,
+					Skip,
+					"token introspection failed ({e}), continue due to permissive mode"
+				);
+				return Ok(());
+			}
+			dtrace::pol_result!(
+				dtrace::Severity::Error,
+				Apply,
+				"rejected request because token introspection failed: {e}"
+			);
+			return Err(e);
+		}
 
 		if let Some(serde_json::Value::String(sub)) = claims.inner.get("sub")
 			&& let Some(log) = log
@@ -564,6 +776,15 @@ impl Jwt {
 	}
 
 	pub fn validate_claims(&self, token: &str) -> Result<Claims, TokenError> {
+		self
+			.validate_claims_with_provider(token)
+			.map(|(claims, _)| claims)
+	}
+
+	fn validate_claims_with_provider<'a>(
+		&'a self,
+		token: &str,
+	) -> Result<(Claims, &'a Provider), TokenError> {
 		let header = decode_header(token).map_err(|error| {
 			debug!(?error, "Received token with invalid header.");
 
@@ -575,28 +796,33 @@ impl Jwt {
 			TokenError::MissingKeyId
 		})?;
 
-		// Search for the key across all providers
-		let key = self
-			.providers
-			.iter()
-			.find_map(|provider| provider.keys.get(kid))
-			.ok_or_else(|| {
-				debug!(%kid, "Token refers to an unknown key.");
+		let mut matching_key = false;
+		let mut last_error = None;
+		for provider in &self.providers {
+			let Some(key) = provider.keys.get(kid) else {
+				continue;
+			};
+			matching_key = true;
+			match decode::<Map<String, Value>>(token, &key.decoding, &key.validation) {
+				Ok(decoded_token) => {
+					return Ok((
+						Claims {
+							inner: decoded_token.claims,
+							jwt: SecretString::new(token.into()),
+						},
+						provider,
+					));
+				},
+				Err(error) => last_error = Some(error),
+			}
+		}
 
-				TokenError::UnknownKeyId(kid.to_owned())
-			})?;
-
-		let decoded_token = decode::<Map<String, Value>>(token, &key.decoding, &key.validation)
-			.map_err(|error| {
-				debug!(?error, "Token is malformed or does not pass validation.");
-
-				TokenError::Invalid(error)
-			})?;
-
-		let claims = Claims {
-			inner: decoded_token.claims,
-			jwt: SecretString::new(token.into()),
-		};
-		Ok(claims)
+		if !matching_key {
+			debug!(%kid, "Token refers to an unknown key.");
+			return Err(TokenError::UnknownKeyId(kid.to_owned()));
+		}
+		let error = last_error.expect("a matching key must produce a decode result");
+		debug!(?error, "Token is malformed or does not pass validation.");
+		Err(TokenError::Invalid(error))
 	}
 }
