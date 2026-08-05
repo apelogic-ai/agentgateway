@@ -2,9 +2,12 @@ use std::collections::HashSet;
 
 use itertools::Itertools;
 use serde_json::json;
+use wiremock::matchers::{body_string_contains, header, method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::{
-	JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode, Provider, ProviderConfig, TokenError,
+	IntrospectionConfig, JWTAlgorithm, JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode,
+	Provider, ProviderConfig, TokenError,
 };
 use crate::serdes::FileInlineOrRemote;
 use crate::telemetry::log::MetricsConfig;
@@ -93,11 +96,13 @@ fn test_deserialize_multi_provider_with_jwt_validation_options() {
 			{
 				"issuer": "https://idp-1.example.com",
 				"jwks": { "url": "https://idp-1.example.com/.well-known/jwks.json" },
+				"allowedAlgorithms": ["ES256"],
 				"jwtValidationOptions": { "requiredClaims": [] }
 			},
 			{
 				"issuer": "https://idp-2.example.com",
 				"jwks": { "url": "https://idp-2.example.com/.well-known/jwks.json" },
+				"allowedAlgorithms": ["EdDSA"],
 				"jwtValidationOptions": { "requiredClaims": ["exp", "nbf"] }
 			}
 		]
@@ -121,6 +126,49 @@ fn test_deserialize_multi_provider_with_jwt_validation_options() {
 		},
 		_ => panic!("expected Multi variant"),
 	}
+}
+
+#[test]
+fn test_deserialize_multi_provider_enforcement_contract() {
+	let json = r#"{
+		"providers": [{
+			"issuer": "https://issuer.example.com",
+			"audiences": ["https://gateway.example.com/mcp"],
+			"jwks": { "url": "https://issuer.example.com/.well-known/jwks.json" },
+			"allowedAlgorithms": ["EdDSA"],
+			"introspection": {
+				"url": "https://issuer.example.com/oauth/introspect",
+				"credentialFile": "/var/run/secrets/mcp-gateway/introspection/issuer-0"
+			}
+		}]
+	}"#;
+	let config: LocalJwtConfig = serde_json::from_str(json).unwrap();
+	let LocalJwtConfig::Multi { providers, .. } = config else {
+		panic!("expected Multi variant");
+	};
+	assert_eq!(providers[0].allowed_algorithms, vec![JWTAlgorithm::EdDsa]);
+	let introspection = providers[0].introspection.as_ref().unwrap();
+	assert_eq!(
+		introspection.url.as_str(),
+		"https://issuer.example.com/oauth/introspect"
+	);
+	assert_eq!(
+		introspection.credential_file,
+		std::path::PathBuf::from("/var/run/secrets/mcp-gateway/introspection/issuer-0")
+	);
+}
+
+#[test]
+fn test_deserialize_rejects_empty_allowed_algorithms() {
+	let json = r#"{
+		"providers": [{
+			"issuer": "https://issuer.example.com",
+			"audiences": ["https://gateway.example.com/mcp"],
+			"jwks": { "url": "https://issuer.example.com/.well-known/jwks.json" },
+			"allowedAlgorithms": []
+		}]
+	}"#;
+	assert!(serde_json::from_str::<LocalJwtConfig>(json).is_err());
 }
 
 // Deserialization: the old key name "validationOptions" is rejected
@@ -164,6 +212,8 @@ fn unavailable_provider() -> ProviderConfig {
 				.parse()
 				.unwrap(),
 		},
+		allowed_algorithms: vec![JWTAlgorithm::Es256],
+		introspection: None,
 		jwt_validation_options: JWTValidationOptions::default(),
 	}
 }
@@ -179,6 +229,8 @@ async fn test_multi_provider_jwks_failure_preserves_healthy_provider() {
 				issuer: "https://healthy.example.com".into(),
 				audiences: Some(vec!["mcp-gateway".into()]),
 				jwks: inline_test_jwks(),
+				allowed_algorithms: vec![JWTAlgorithm::Es256],
+				introspection: None,
 				jwt_validation_options: JWTValidationOptions::default(),
 			},
 		],
@@ -250,10 +302,12 @@ pub fn test_azure_jwks() {
 			"issuer": "https://login.microsoftonline.com/{tenantid}/v2.0"
 	}]});
 	let jwks = serde_json::from_value(azure_ad).unwrap();
-	let p = Provider::from_jwks(
+	let p = Provider::from_jwks_with_policy(
 		jwks,
 		"https://login.microsoftonline.com/test/v2.0".to_string(),
 		Some(vec!["test-aud".to_string()]),
+		vec![JWTAlgorithm::Rs256],
+		None,
 		JWTValidationOptions::default(),
 	)
 	.unwrap();
@@ -279,10 +333,12 @@ pub fn test_basic_jwks() {
 		]
 	});
 	let jwks = serde_json::from_value(azure_ad).unwrap();
-	let p = Provider::from_jwks(
+	let p = Provider::from_jwks_with_policy(
 		jwks,
 		"https://example.com".to_string(),
 		Some(vec!["test-aud".to_string()]),
+		vec![JWTAlgorithm::Es256],
+		None,
 		JWTValidationOptions::default(),
 	)
 	.unwrap();
@@ -307,10 +363,12 @@ pub fn test_ed25519_jwks() {
 		]
 	});
 	let jwks = serde_json::from_value(jwks).unwrap();
-	let p = Provider::from_jwks(
+	let p = Provider::from_jwks_with_policy(
 		jwks,
 		"https://example.com".to_string(),
 		Some(vec!["test-aud".to_string()]),
+		vec![JWTAlgorithm::EdDsa],
+		None,
 		JWTValidationOptions::default(),
 	)
 	.unwrap();
@@ -344,10 +402,12 @@ pub fn test_ed25519_jwt_validation() {
 	let jwks = serde_json::from_value(jwks).unwrap();
 	let issuer = "https://example.com";
 	let aud = "test-aud";
-	let provider = Provider::from_jwks(
+	let provider = Provider::from_jwks_with_policy(
 		jwks,
 		issuer.to_string(),
 		Some(vec![aud.to_string()]),
+		vec![JWTAlgorithm::EdDsa],
+		None,
 		JWTValidationOptions::default(),
 	)
 	.unwrap();
@@ -396,10 +456,12 @@ pub fn test_okp_non_ed25519_curve_rejected() {
 		]
 	});
 	let jwks = serde_json::from_value(jwks).unwrap();
-	let result = Provider::from_jwks(
+	let result = Provider::from_jwks_with_policy(
 		jwks,
 		"https://example.com".to_string(),
 		Some(vec!["test-aud".to_string()]),
+		vec![JWTAlgorithm::EdDsa],
+		None,
 		JWTValidationOptions::default(),
 	);
 	assert!(matches!(result, Err(JwkError::UnsupportedCurve { .. })));
@@ -425,10 +487,12 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 	let allowed_aud = "allowed-aud";
 	let kid = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";
 
-	let mut provider = Provider::from_jwks(
+	let mut provider = Provider::from_jwks_with_policy(
 		jwks,
 		issuer.to_string(),
 		Some(vec![allowed_aud.to_string()]),
+		vec![JWTAlgorithm::Es256],
+		None,
 		JWTValidationOptions::default(),
 	)
 	.unwrap();
@@ -456,14 +520,39 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 }
 
 fn build_unsigned_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
+	build_unsigned_token_with_algorithm(kid, iss, aud, exp, "ES256")
+}
+
+fn build_unsigned_token_with_algorithm(
+	kid: &str,
+	iss: &str,
+	aud: &str,
+	exp: u64,
+	algorithm: &str,
+) -> String {
 	use base64::Engine as _;
 	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-	let header = json!({ "alg": "ES256", "kid": kid });
+	let header = json!({ "alg": algorithm, "kid": kid });
 	let payload = json!({ "iss": iss, "aud": aud, "exp": exp });
 	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
 	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
 	let s = URL_SAFE_NO_PAD.encode(b"sig");
 	format!("{h}.{p}.{s}")
+}
+
+#[test]
+fn test_jwt_rejects_algorithm_outside_provider_allowlist() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	let (jwt, kid, issuer, audience) = setup_test_jwt();
+	let exp = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs()
+		+ 600;
+	let token = build_unsigned_token_with_algorithm(kid, issuer, audience, exp, "EdDSA");
+	let result = jwt.validate_claims(&token);
+	assert!(matches!(result, Err(TokenError::Invalid(_))));
 }
 
 fn build_unsigned_token_without_kid(iss: &str, aud: &str, exp: u64) -> String {
@@ -699,6 +788,127 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 			.is_none()
 	);
 	assert!(req.extensions().get::<super::Claims>().is_some());
+}
+
+fn valid_test_token(kid: &str, issuer: &str, audience: &str) -> String {
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	let exp = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs()
+		+ 600;
+	build_unsigned_token(kid, issuer, audience, exp)
+}
+
+fn request_with_bearer(token: &str) -> crate::http::Request {
+	let mut request = crate::http::Request::new(crate::http::Body::empty());
+	request.headers_mut().insert(
+		crate::http::header::AUTHORIZATION,
+		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+	);
+	request
+}
+
+fn introspection_credential_file() -> tempfile::NamedTempFile {
+	use std::io::Write;
+
+	let mut file = tempfile::NamedTempFile::new().unwrap();
+	writeln!(file, "runtime-secret").unwrap();
+	file
+}
+
+fn configure_introspection(
+	jwt: &mut Jwt,
+	server: &MockServer,
+	credential_file: &tempfile::NamedTempFile,
+) {
+	jwt.providers[0].introspection = Some(IntrospectionConfig {
+		url: format!("{}/introspect", server.uri()).parse().unwrap(),
+		credential_file: credential_file.path().to_path_buf(),
+	});
+}
+
+#[tokio::test]
+async fn test_apply_accepts_active_introspection_response() {
+	let server = MockServer::start().await;
+	Mock::given(method("POST"))
+		.and(path("/introspect"))
+		.and(header("authorization", "Bearer runtime-secret"))
+		.and(body_string_contains("token="))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({ "active": true })))
+		.mount(&server)
+		.await;
+
+	let (mut jwt, kid, issuer, audience) = setup_test_jwt();
+	let credential_file = introspection_credential_file();
+	configure_introspection(&mut jwt, &server, &credential_file);
+	let token = valid_test_token(kid, issuer, audience);
+	let mut request = request_with_bearer(&token);
+
+	jwt.apply(None, &mut request).await.unwrap();
+	assert!(request.extensions().get::<super::Claims>().is_some());
+}
+
+#[tokio::test]
+async fn test_apply_rejects_inactive_introspection_response() {
+	let server = MockServer::start().await;
+	Mock::given(method("POST"))
+		.and(path("/introspect"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({ "active": false })))
+		.mount(&server)
+		.await;
+
+	let (mut jwt, kid, issuer, audience) = setup_test_jwt();
+	let credential_file = introspection_credential_file();
+	configure_introspection(&mut jwt, &server, &credential_file);
+	let mut request = request_with_bearer(&valid_test_token(kid, issuer, audience));
+
+	assert!(matches!(
+		jwt.apply(None, &mut request).await,
+		Err(TokenError::Inactive)
+	));
+}
+
+#[tokio::test]
+async fn test_apply_rejects_unavailable_or_malformed_introspection_response() {
+	for response in [
+		ResponseTemplate::new(503),
+		ResponseTemplate::new(200).set_body_string("not-json"),
+	] {
+		let server = MockServer::start().await;
+		Mock::given(method("POST"))
+			.and(path("/introspect"))
+			.respond_with(response)
+			.mount(&server)
+			.await;
+
+		let (mut jwt, kid, issuer, audience) = setup_test_jwt();
+		let credential_file = introspection_credential_file();
+		configure_introspection(&mut jwt, &server, &credential_file);
+		let mut request = request_with_bearer(&valid_test_token(kid, issuer, audience));
+
+		assert!(matches!(
+			jwt.apply(None, &mut request).await,
+			Err(TokenError::IntrospectionUnavailable(_))
+		));
+	}
+}
+
+#[tokio::test]
+async fn test_apply_rejects_missing_introspection_credential_file() {
+	let server = MockServer::start().await;
+	let (mut jwt, kid, issuer, audience) = setup_test_jwt();
+	jwt.providers[0].introspection = Some(IntrospectionConfig {
+		url: format!("{}/introspect", server.uri()).parse().unwrap(),
+		credential_file: "/missing/introspection-credential".into(),
+	});
+	let mut request = request_with_bearer(&valid_test_token(kid, issuer, audience));
+
+	assert!(matches!(
+		jwt.apply(None, &mut request).await,
+		Err(TokenError::IntrospectionUnavailable(_))
+	));
 }
 
 #[tokio::test]

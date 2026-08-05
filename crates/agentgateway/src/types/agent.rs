@@ -2880,6 +2880,10 @@ pub struct LocalMcpAuthenticationProvider {
 	/// If omitted, the JWKS URL is derived from the issuer and provider.
 	#[serde(default)]
 	pub jwks: Option<FileInlineOrRemote>,
+	/// Signature algorithms accepted for this provider. The list must not be empty.
+	pub allowed_algorithms: Vec<http::jwt::JWTAlgorithm>,
+	/// Optional online token status check performed after signature and claim validation.
+	pub introspection: Option<http::jwt::IntrospectionConfig>,
 	/// Whether this provider should be used when deriving MCP protected-resource metadata.
 	#[serde(default = "default_mcp_provider_discoverable")]
 	pub discoverable: bool,
@@ -2955,10 +2959,15 @@ impl LocalMcpAuthenticationProvider {
 	}
 
 	fn as_jwt_provider(&self) -> anyhow::Result<http::jwt::ProviderConfig> {
+		if self.allowed_algorithms.is_empty() {
+			anyhow::bail!("mcpAuthentication provider allowedAlgorithms must not be empty");
+		}
 		Ok(http::jwt::ProviderConfig {
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks: self.resolved_jwks()?,
+			allowed_algorithms: self.allowed_algorithms.clone(),
+			introspection: self.introspection.clone(),
 			jwt_validation_options: self.jwt_validation_options.clone(),
 		})
 	}
@@ -2977,6 +2986,8 @@ impl LocalMcpAuthentication {
 				.ok_or_else(|| anyhow::anyhow!("mcpAuthentication requires audiences or providers"))?,
 			provider: self.provider.clone(),
 			jwks: self.jwks.clone(),
+			allowed_algorithms: Vec::new(),
+			introspection: None,
 			discoverable: true,
 			jwt_validation_options: self.jwt_validation_options.clone(),
 			client_id: self.client_id.clone(),
@@ -3181,6 +3192,52 @@ pub mod defaults {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn mcp_authentication_forwards_provider_enforcement_contract() {
+		let config: LocalMcpAuthentication = serde_json::from_value(serde_json::json!({
+			"resourceMetadata": { "mcpResourceUri": "https://gateway.example.com/mcp" },
+			"providers": [{
+				"issuer": "https://issuer.example.com",
+				"audiences": ["https://gateway.example.com/mcp"],
+				"jwks": { "url": "https://issuer.example.com/.well-known/jwks.json" },
+				"allowedAlgorithms": ["EdDSA"],
+				"introspection": {
+					"url": "https://issuer.example.com/oauth/introspect",
+					"credentialFile": "/var/run/secrets/mcp-gateway/introspection/issuer-0"
+				}
+			}]
+		}))
+		.unwrap();
+
+		let http::jwt::LocalJwtConfig::Multi { providers, .. } = config.as_jwt().unwrap() else {
+			panic!("expected multi-provider JWT config");
+		};
+		assert_eq!(
+			providers[0].allowed_algorithms,
+			vec![http::jwt::JWTAlgorithm::EdDsa]
+		);
+		assert_eq!(
+			providers[0].introspection.as_ref().unwrap().credential_file,
+			PathBuf::from("/var/run/secrets/mcp-gateway/introspection/issuer-0")
+		);
+	}
+
+	#[test]
+	fn mcp_authentication_rejects_empty_provider_algorithms() {
+		let config: LocalMcpAuthentication = serde_json::from_value(serde_json::json!({
+			"resourceMetadata": { "mcpResourceUri": "https://gateway.example.com/mcp" },
+			"providers": [{
+				"issuer": "https://issuer.example.com",
+				"audiences": ["https://gateway.example.com/mcp"],
+				"jwks": { "url": "https://issuer.example.com/.well-known/jwks.json" },
+				"allowedAlgorithms": []
+			}]
+		}))
+		.unwrap();
+
+		assert!(config.as_jwt().is_err());
+	}
 
 	fn route_match(path: &'static str) -> RouteMatch {
 		RouteMatch {
@@ -3686,10 +3743,12 @@ jwtValidationOptions:
 providers:
   - issuer: "https://accounts.google.com"
     audiences: ["mcp-gw"]
+    allowedAlgorithms: ["RS256"]
     jwks: '{"keys":[]}'
     discoverable: true
-  - issuer: "https://burble.example.com"
+  - issuer: "https://headless.example.com"
     audiences: ["mcp-gw"]
+    allowedAlgorithms: ["EdDSA"]
     jwks: '{"keys":[]}'
     discoverable: false
 resourceMetadata:
@@ -3703,7 +3762,7 @@ resourceMetadata:
 				assert_eq!(providers.len(), 2);
 				assert_eq!(providers[0].issuer, "https://accounts.google.com");
 				assert_eq!(providers[0].audiences, Some(vec!["mcp-gw".to_owned()]));
-				assert_eq!(providers[1].issuer, "https://burble.example.com");
+				assert_eq!(providers[1].issuer, "https://headless.example.com");
 				assert_eq!(providers[1].audiences, Some(vec!["mcp-gw".to_owned()]));
 			},
 			_ => panic!("Expected LocalJwtConfig::Multi"),
@@ -3716,10 +3775,12 @@ resourceMetadata:
 providers:
   - issuer: "https://headless.example.com"
     audiences: ["mcp-gw"]
+    allowedAlgorithms: ["EdDSA"]
     jwks: '{"keys":[]}'
     discoverable: false
   - issuer: "https://interactive.example.com"
     audiences: ["mcp-gw"]
+    allowedAlgorithms: ["RS256"]
     jwks: '{"keys":[]}'
     discoverable: true
 resourceMetadata:
