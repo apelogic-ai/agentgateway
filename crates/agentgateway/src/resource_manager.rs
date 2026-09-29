@@ -13,7 +13,7 @@ use http::header::EXPIRES;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep_until};
-use tracing::{trace, warn};
+use tracing::{info, trace, warn};
 
 use crate::client::Client;
 use crate::http::Body;
@@ -23,6 +23,7 @@ const OPENAPI_TTL: Duration = Duration::from_hours(24);
 const GENERIC_TTL: Duration = Duration::from_mins(15);
 const FAILED_HTTP_REFRESH: Duration = Duration::from_secs(15);
 const MIN_HTTP_REFRESH: Duration = Duration::from_secs(60);
+const ON_DEMAND_REFRESH_COOLDOWN: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum ResourceKind {
@@ -145,6 +146,18 @@ impl ResourceFetcher {
 		}
 	}
 
+	/// Requests a bounded, asynchronous refresh for an active managed resource.
+	/// Returns false when the resource is unmanaged, inactive, or cooling down.
+	pub fn request_refresh(&self, resource: ResourceRef) -> bool {
+		let ResourceFetcherMode::Managed(manager) = &self.mode else {
+			return false;
+		};
+		let Ok(resource) = normalize_resource(resource) else {
+			return false;
+		};
+		manager.request_refresh(resource)
+	}
+
 	/// Records managed resource lookups during a full config computation.
 	/// The returned guard commits fetched resources on success, or restores the
 	/// last committed set on failure so failed reloads do not leave stale state.
@@ -218,6 +231,10 @@ impl Drop for ResourceFetchScope<'_> {
 struct Inner {
 	client: Client,
 	entries: Mutex<HashMap<ResourceRef, Entry>>,
+	// Refresh deadlines for resources that do not have cached content yet.
+	pending_refreshes: Mutex<HashMap<ResourceRef, Instant>>,
+	// Last request-triggered refresh, used to bound unknown-key refetches.
+	on_demand_refreshes: Mutex<HashMap<ResourceRef, Instant>>,
 	// Resources referenced by the last successfully normalized local config.
 	// Background refreshes check this before publishing changes.
 	active_resources: Mutex<HashSet<ResourceRef>>,
@@ -338,6 +355,8 @@ impl ResourceManager {
 			inner: Arc::new(Inner {
 				client,
 				entries: Default::default(),
+				pending_refreshes: Default::default(),
+				on_demand_refreshes: Default::default(),
 				active_resources: Default::default(),
 				watched_files: Default::default(),
 				scheduler_tx,
@@ -369,10 +388,11 @@ impl ResourceManager {
 			Ok(result) => result,
 			Err(error) => {
 				if matches!(resource, ResourceRef::Http { .. }) {
-					let _ = self.inner.scheduler_tx.send(ScheduledRefresh {
-						at: Instant::now() + FAILED_HTTP_REFRESH,
-						resource: resource.clone(),
-					});
+					self.schedule_refresh(
+						resource.clone(),
+						Instant::now() + FAILED_HTTP_REFRESH,
+						false,
+					);
 				}
 				return Err(error);
 			},
@@ -426,6 +446,18 @@ impl ResourceManager {
 			.lock()
 			.expect("resource cache mutex poisoned")
 			.retain(|resource, _| retained.contains(resource));
+		self
+			.inner
+			.pending_refreshes
+			.lock()
+			.expect("resource pending refresh mutex poisoned")
+			.retain(|resource, _| retained.contains(resource));
+		self
+			.inner
+			.on_demand_refreshes
+			.lock()
+			.expect("resource on-demand refresh mutex poisoned")
+			.retain(|resource, _| retained.contains(resource));
 
 		let retained_files = retained
 			.iter()
@@ -450,6 +482,12 @@ impl ResourceManager {
 	fn store(&self, resource: ResourceRef, content: Bytes, next: Option<Instant>) {
 		self
 			.inner
+			.pending_refreshes
+			.lock()
+			.expect("resource pending refresh mutex poisoned")
+			.remove(&resource);
+		self
+			.inner
 			.entries
 			.lock()
 			.expect("resource cache mutex poisoned")
@@ -457,20 +495,78 @@ impl ResourceManager {
 				resource.clone(),
 				Entry {
 					content,
-					next_refresh: next,
+					next_refresh: None,
 				},
 			);
 		if let Some(at) = next {
-			tracing::debug!(
-				resource = %resource_key(&resource),
-				refresh_in = ?at.saturating_duration_since(Instant::now()),
-				"scheduled resource refresh"
-			);
-			let _ = self
-				.inner
-				.scheduler_tx
-				.send(ScheduledRefresh { at, resource });
+			self.schedule_refresh(resource, at, true);
 		}
+	}
+
+	fn schedule_refresh(&self, resource: ResourceRef, at: Instant, replace: bool) {
+		let scheduled = {
+			let mut entries = self
+				.inner
+				.entries
+				.lock()
+				.expect("resource cache mutex poisoned");
+			if let Some(entry) = entries.get_mut(&resource) {
+				if replace || entry.next_refresh.is_none_or(|current| at < current) {
+					entry.next_refresh = Some(at);
+					true
+				} else {
+					false
+				}
+			} else {
+				drop(entries);
+				let mut pending = self
+					.inner
+					.pending_refreshes
+					.lock()
+					.expect("resource pending refresh mutex poisoned");
+				if replace || pending.get(&resource).is_none_or(|current| at < *current) {
+					pending.insert(resource.clone(), at);
+					true
+				} else {
+					false
+				}
+			}
+		};
+		if !scheduled {
+			return;
+		}
+		tracing::debug!(
+			resource = %resource_key(&resource),
+			refresh_in = ?at.saturating_duration_since(Instant::now()),
+			"scheduled resource refresh"
+		);
+		let _ = self
+			.inner
+			.scheduler_tx
+			.send(ScheduledRefresh { at, resource });
+	}
+
+	fn request_refresh(&self, resource: ResourceRef) -> bool {
+		if !self.is_active(&resource) {
+			return false;
+		}
+		let now = Instant::now();
+		{
+			let mut requested = self
+				.inner
+				.on_demand_refreshes
+				.lock()
+				.expect("resource on-demand refresh mutex poisoned");
+			if requested
+				.get(&resource)
+				.is_some_and(|last| now.saturating_duration_since(*last) < ON_DEMAND_REFRESH_COOLDOWN)
+			{
+				return false;
+			}
+			requested.insert(resource.clone(), now);
+		}
+		self.schedule_refresh(resource, now, true);
+		true
 	}
 
 	async fn refetch_and_notify_if_changed(&self, resource: ResourceRef) {
@@ -487,11 +583,7 @@ impl ResourceManager {
 				if !self.is_active(&resource) {
 					return;
 				}
-				let next = Instant::now() + FAILED_HTTP_REFRESH;
-				let _ = self
-					.inner
-					.scheduler_tx
-					.send(ScheduledRefresh { at: next, resource });
+				self.schedule_refresh(resource, Instant::now() + FAILED_HTTP_REFRESH, true);
 				return;
 			},
 		};
@@ -499,34 +591,38 @@ impl ResourceManager {
 			return;
 		}
 
-		let changed = {
+		let (changed, recovered) = {
 			let mut entries = self
 				.inner
 				.entries
 				.lock()
 				.expect("resource cache mutex poisoned");
-			let changed = entries
-				.get(&resource)
-				.is_none_or(|entry| entry.content != content);
+			let previous = entries.get(&resource);
+			let recovered = previous.is_none();
+			let changed = previous.is_none_or(|entry| entry.content != content);
 			entries.insert(
 				resource.clone(),
 				Entry {
 					content,
-					next_refresh: next,
+					next_refresh: None,
 				},
 			);
-			changed
+			(changed, recovered)
 		};
+		self
+			.inner
+			.pending_refreshes
+			.lock()
+			.expect("resource pending refresh mutex poisoned")
+			.remove(&resource);
 		if let Some(at) = next {
-			tracing::debug!(
+			self.schedule_refresh(resource.clone(), at, true);
+		}
+		if recovered {
+			info!(
 				resource = %resource_key(&resource),
-				refresh_in = ?at.saturating_duration_since(Instant::now()),
-				"scheduled resource refresh"
+				"resource became available after a previous fetch failure"
 			);
-			let _ = self.inner.scheduler_tx.send(ScheduledRefresh {
-				at,
-				resource: resource.clone(),
-			});
 		}
 		if changed {
 			self.notify_changed(&resource);
@@ -681,14 +777,29 @@ impl ResourceManager {
 		if !self.is_active(resource) {
 			return false;
 		}
-		self
+		{
+			let mut entries = self
+				.inner
+				.entries
+				.lock()
+				.expect("resource cache mutex poisoned");
+			if let Some(entry) = entries.get_mut(resource)
+				&& entry.next_refresh == Some(at)
+			{
+				entry.next_refresh = None;
+				return true;
+			}
+		}
+		let mut pending = self
 			.inner
-			.entries
+			.pending_refreshes
 			.lock()
-			.expect("resource cache mutex poisoned")
-			.get(resource)
-			.and_then(|entry| entry.next_refresh)
-			.is_some_and(|current| current == at)
+			.expect("resource pending refresh mutex poisoned");
+		if pending.get(resource) == Some(&at) {
+			pending.remove(resource);
+			return true;
+		}
+		false
 	}
 
 	fn notify_changed(&self, resource: &ResourceRef) {
@@ -843,6 +954,88 @@ mod tests {
 			ttl_from_headers(&headers, Duration::from_secs(5)),
 			Duration::from_secs(5)
 		);
+	}
+
+	#[tokio::test]
+	async fn scheduled_retry_without_cached_content_is_claimed_once() {
+		let manager = ResourceManager::new(test_client()).unwrap();
+		let resource = ResourceRef::Http {
+			url: "https://issuer.example.com/.well-known/jwks.json"
+				.parse()
+				.unwrap(),
+			kind: ResourceKind::Jwks,
+		};
+		manager
+			.inner
+			.active_resources
+			.lock()
+			.expect("resource active set mutex poisoned")
+			.insert(resource.clone());
+		let at = Instant::now() + FAILED_HTTP_REFRESH;
+
+		manager.schedule_refresh(resource.clone(), at, true);
+
+		assert!(manager.should_refresh(&resource, at));
+		assert!(!manager.should_refresh(&resource, at));
+	}
+
+	#[tokio::test]
+	async fn failed_refresh_replaces_the_consumed_deadline() {
+		let manager = ResourceManager::new(test_client()).unwrap();
+		let resource = ResourceRef::Http {
+			url: "https://issuer.example.com/.well-known/jwks.json"
+				.parse()
+				.unwrap(),
+			kind: ResourceKind::Jwks,
+		};
+		manager
+			.inner
+			.active_resources
+			.lock()
+			.expect("resource active set mutex poisoned")
+			.insert(resource.clone());
+		let first = Instant::now() + Duration::from_secs(1);
+		manager.store(resource.clone(), Bytes::from_static(b"old"), Some(first));
+		assert!(manager.should_refresh(&resource, first));
+
+		let retry = first + FAILED_HTTP_REFRESH;
+		manager.schedule_refresh(resource.clone(), retry, true);
+
+		assert!(manager.should_refresh(&resource, retry));
+	}
+
+	#[tokio::test]
+	async fn on_demand_refresh_is_rate_limited_and_preempts_ttl() {
+		let manager = ResourceManager::new(test_client()).unwrap();
+		let resource = ResourceRef::Http {
+			url: "https://issuer.example.com/.well-known/jwks.json"
+				.parse()
+				.unwrap(),
+			kind: ResourceKind::Jwks,
+		};
+		manager
+			.inner
+			.active_resources
+			.lock()
+			.expect("resource active set mutex poisoned")
+			.insert(resource.clone());
+		manager.store(
+			resource.clone(),
+			Bytes::from_static(b"old"),
+			Some(Instant::now() + JWKS_TTL),
+		);
+
+		assert!(manager.request_refresh(resource.clone()));
+		assert!(!manager.request_refresh(resource.clone()));
+		let scheduled = manager
+			.inner
+			.entries
+			.lock()
+			.expect("resource cache mutex poisoned")
+			.get(&resource)
+			.and_then(|entry| entry.next_refresh)
+			.expect("on-demand refresh deadline");
+		assert!(scheduled <= Instant::now());
 	}
 
 	#[tokio::test]

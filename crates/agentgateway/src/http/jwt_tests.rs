@@ -6,8 +6,8 @@ use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::{
-	IntrospectionConfig, JWTAlgorithm, JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode,
-	Provider, ProviderConfig, TokenError,
+	IntrospectionConfig, JWTAlgorithm, JWTValidationOptions, JwkError, JwksRefresh, Jwt,
+	LocalJwtConfig, Mode, Provider, ProviderConfig, TokenError,
 };
 use crate::serdes::FileInlineOrRemote;
 use crate::telemetry::log::MetricsConfig;
@@ -16,6 +16,19 @@ type ProviderInfo = (&'static str, &'static str, &'static str);
 
 fn bearer_location() -> crate::http::auth::AuthorizationLocation {
 	crate::http::auth::AuthorizationLocation::bearer_header()
+}
+
+fn test_resource_manager() -> crate::resource_manager::ResourceManager {
+	crate::resource_manager::ResourceManager::new(crate::client::Client::new(
+		&crate::client::Config {
+			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+		},
+		None,
+		crate::BackendConfig::default(),
+		None,
+	))
+	.unwrap()
 }
 
 // Deserialization: missing jwtValidationOptions defaults required_claims to ["exp"]
@@ -263,6 +276,52 @@ async fn test_multi_provider_all_jwks_failures_remain_fail_closed() {
 		jwt.validate_claims("not-a-jwt"),
 		Err(TokenError::InvalidHeader(_))
 	));
+}
+
+#[tokio::test]
+async fn test_unknown_key_requests_one_rate_limited_remote_refresh() {
+	let manager = test_resource_manager();
+	let resources = crate::resource_manager::ResourceFetcher::managed(manager.clone());
+	let resource = crate::resource_manager::ResourceRef::Http {
+		url: "https://issuer.example.com/.well-known/jwks.json"
+			.parse()
+			.unwrap(),
+		kind: crate::resource_manager::ResourceKind::Jwks,
+	};
+	manager.retain_resources(HashSet::from([resource.clone()]));
+
+	let mut provider = Provider::from_jwks_with_policy(
+		match inline_test_jwks() {
+			FileInlineOrRemote::Inline(jwks) => serde_json::from_str(&jwks).unwrap(),
+			_ => unreachable!(),
+		},
+		"https://issuer.example.com".into(),
+		Some(vec!["mcp-gateway".into()]),
+		vec![JWTAlgorithm::Es256],
+		None,
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+	provider.jwks_refresh = Some(JwksRefresh {
+		resources: resources.clone(),
+		resource: resource.clone(),
+	});
+	let jwt = Jwt::from_providers(vec![provider], Mode::Strict, bearer_location());
+	let mut request = request_with_bearer(&build_unsigned_token(
+		"rotated-key",
+		"https://issuer.example.com",
+		"mcp-gateway",
+		u64::MAX,
+	));
+
+	assert!(matches!(
+		jwt.apply(None, &mut request).await,
+		Err(TokenError::UnknownKeyId(key_id)) if key_id == "rotated-key"
+	));
+	assert!(
+		!resources.request_refresh(resource),
+		"the authentication attempt should consume the current refresh allowance"
+	);
 }
 
 #[tokio::test]
