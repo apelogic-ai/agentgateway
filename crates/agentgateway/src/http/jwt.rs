@@ -88,6 +88,13 @@ pub struct Provider {
 	issuer: String,
 	keys: HashMap<String, Jwk>,
 	introspection: Option<IntrospectionConfig>,
+	jwks_refresh: Option<JwksRefresh>,
+}
+
+#[derive(Clone)]
+struct JwksRefresh {
+	resources: crate::resource_manager::ResourceFetcher,
+	resource: crate::resource_manager::ResourceRef,
 }
 
 // TODO: can we give anything useful here?
@@ -353,6 +360,13 @@ impl LocalJwtConfig {
 
 		let mut providers = Vec::with_capacity(providers_cfg.len());
 		for pc in providers_cfg {
+			let jwks_refresh = pc
+				.jwks
+				.as_resource_ref(crate::resource_manager::ResourceKind::Jwks)
+				.map(|resource| JwksRefresh {
+					resources: resources.clone(),
+					resource,
+				});
 			let jwks: JwkSet = match pc
 				.jwks
 				.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
@@ -382,7 +396,10 @@ impl LocalJwtConfig {
 				)
 			};
 			match provider {
-				Ok(provider) => providers.push(provider),
+				Ok(mut provider) => {
+					provider.jwks_refresh = jwks_refresh;
+					providers.push(provider);
+				},
 				Err(error) if isolate_provider_failures => {
 					warn!(%error, "JWT provider configuration is unusable; requests for this issuer will fail closed");
 				},
@@ -548,6 +565,7 @@ impl Provider {
 			issuer,
 			keys,
 			introspection,
+			jwks_refresh: None,
 		})
 	}
 
@@ -718,7 +736,11 @@ impl Jwt {
 			);
 			return Ok(());
 		};
-		let (claims, provider) = match self.validate_claims_with_provider(&token) {
+		let validated = self.validate_claims_with_provider(&token);
+		if let Err(TokenError::UnknownKeyId(key_id)) = &validated {
+			self.request_jwks_refresh(key_id);
+		}
+		let (claims, provider) = match validated {
 			Ok(validated) => validated,
 			Err(e) if self.mode == Mode::Permissive => {
 				dtrace::pol_result!(
@@ -773,6 +795,22 @@ impl Jwt {
 		);
 		req.extensions_mut().insert(claims);
 		Ok(())
+	}
+
+	fn request_jwks_refresh(&self, key_id: &str) {
+		let requested = self
+			.providers
+			.iter()
+			.filter_map(|provider| provider.jwks_refresh.as_ref())
+			.filter(|refresh| refresh.resources.request_refresh(refresh.resource.clone()))
+			.count();
+		if requested > 0 {
+			warn!(
+				%key_id,
+				providers = requested,
+				"JWT key is unknown; requested a rate-limited JWKS refresh"
+			);
+		}
 	}
 
 	pub fn validate_claims(&self, token: &str) -> Result<Claims, TokenError> {
