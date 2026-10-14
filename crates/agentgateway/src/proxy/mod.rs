@@ -321,6 +321,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::InvalidRoutingHeader(_, _)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::MethodNotFound(_, _)) => StatusCode::NOT_FOUND,
 			ProxyError::MCP(mcp::Error::InvalidParams(_, _)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::TaskToolNotApproved(_)) => StatusCode::FORBIDDEN,
 			ProxyError::MCP(mcp::Error::CreateSseUrl(_)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::EstablishGetStream(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::ForwardLegacySse(_)) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -589,5 +590,24 @@ mod tests {
 			grpc.headers().get("grpc-status").unwrap(),
 			&i32::from(Code::Unavailable).to_string()
 		);
+	}
+
+	#[tokio::test]
+	async fn task_tool_denial_is_a_clear_forbidden_json_rpc_error() {
+		let response = ProxyError::MCP(mcp::Error::TaskToolNotApproved(
+			rmcp::model::RequestId::Number(7),
+		))
+		.into_response_with_grpc(false);
+
+		assert_eq!(response.status(), StatusCode::FORBIDDEN);
+		let body = crate::http::read_resp_body(response).await.unwrap();
+		let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+		assert_eq!(payload["id"], 7);
+		assert_eq!(payload["error"]["code"], -32602);
+		assert_eq!(
+			payload["error"]["message"],
+			"Tool is not approved for this Task"
+		);
+		assert_eq!(payload["error"]["data"]["error"], "task_tool_not_approved");
 	}
 }

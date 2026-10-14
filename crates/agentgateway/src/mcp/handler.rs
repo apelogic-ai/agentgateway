@@ -328,6 +328,7 @@ impl Relay {
 			.collect();
 
 		let mut owner = None;
+		let mut resolution_failed = false;
 		for (target, res) in futures::future::join_all(futs).await {
 			match res {
 				Ok(true) => {
@@ -342,6 +343,7 @@ impl Relay {
 				Ok(false) => {},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
+						resolution_failed = true;
 						warn!(
 							"upstream '{target}' failed while resolving {} '{name}', skipping: {e}",
 							kind.as_str()
@@ -353,7 +355,25 @@ impl Relay {
 			}
 		}
 
-		owner.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown {} {name}", kind.as_str())))
+		if let Some(owner) = owner {
+			return Ok(owner);
+		}
+		if kind == ResolveKind::Tool
+			&& !resolution_failed
+			&& let Some(run) = task_run_id(ctx)
+		{
+			info!(
+				event = "task_tool_not_approved",
+				run,
+				tool = name,
+				"task tool call denied"
+			);
+			return Err(UpstreamError::TaskToolNotApproved);
+		}
+		Err(UpstreamError::InvalidRequest(format!(
+			"unknown {} {name}",
+			kind.as_str()
+		)))
 	}
 
 	/// Page through one target's `kind` list until `name` is found or the pages
@@ -1369,6 +1389,19 @@ impl Relay {
 	}
 }
 
+fn task_run_id(ctx: &IncomingRequestContext) -> Option<&str> {
+	const TASK_AUTHORITY_CLAIM: &str = concat!("ste", "ward");
+	ctx
+		.extensions()
+		.get::<crate::http::jwt::Claims>()?
+		.inner
+		.get(TASK_AUTHORITY_CLAIM)?
+		.as_object()?
+		.get("runtime_uid")?
+		.as_str()
+		.filter(|run| !run.is_empty())
+}
+
 pub fn setup_request_log(
 	http: Parts,
 	span_name: &str,
@@ -1770,6 +1803,28 @@ mod tests {
 	use serde_json::json;
 
 	use super::*;
+
+	#[test]
+	fn task_run_id_reads_verified_task_authority() {
+		let mut request = ::http::Request::builder()
+			.uri("http://example.test/mcp")
+			.body(())
+			.unwrap();
+		request.extensions_mut().insert(crate::http::jwt::Claims {
+			inner: json!({
+				"steward": {
+					"runtime_uid": "runtime-uid-a",
+				}
+			})
+			.as_object()
+			.unwrap()
+			.clone(),
+			jwt: Default::default(),
+		});
+		let ctx = IncomingRequestContext::new(&request.into_parts().0);
+
+		assert_eq!(task_run_id(&ctx), Some("runtime-uid-a"));
+	}
 
 	#[test]
 	fn normalize_outbound_result_type_by_downstream_protocol() {
