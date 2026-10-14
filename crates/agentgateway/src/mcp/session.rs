@@ -360,6 +360,9 @@ impl Session {
 			}) if req_id.is_some() => {
 				Err(mcp::Error::Authorization(req_id.unwrap(), resource_type, resource_name).into())
 			},
+			Err(UpstreamError::TaskToolNotApproved) if req_id.is_some() => {
+				Err(mcp::Error::TaskToolNotApproved(req_id.unwrap()).into())
+			},
 			Err(UpstreamError::McpGuardrails(rej)) if req_id.is_some() => {
 				Err(mcp::Error::McpGuardrails(req_id.unwrap(), rej).into())
 			},

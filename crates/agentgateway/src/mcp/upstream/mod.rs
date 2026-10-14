@@ -129,6 +129,8 @@ impl IncomingRequestContext {
 
 #[derive(Debug, Error)]
 pub enum UpstreamError {
+	#[error("tool is not approved for this task")]
+	TaskToolNotApproved,
 	#[error("unknown {resource_type}: {resource_name}")]
 	Authorization {
 		resource_type: String,

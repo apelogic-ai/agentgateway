@@ -143,6 +143,8 @@ pub enum Error {
 	MethodNotFound(Option<RequestId>, String),
 	#[error("invalid request parameters: {1}")]
 	InvalidParams(Option<RequestId>, String),
+	#[error("Tool is not approved for this Task")]
+	TaskToolNotApproved(RequestId),
 	#[error("failed to start stdio server: {0}")]
 	Stdio(io::Error),
 	#[error("upstream error: {}", .0.status())]
@@ -177,6 +179,16 @@ impl Error {
 	pub fn jsonrpc_error_body(&self) -> Option<String> {
 		let (id, error) = match self {
 			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
+			Error::TaskToolNotApproved(id) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::INVALID_PARAMS,
+					message: self.to_string().into(),
+					data: Some(serde_json::json!({
+						"error": "task_tool_not_approved",
+					})),
+				},
+			),
 			Error::UnsupportedVersion {
 				request_id: Some(id),
 				version,
