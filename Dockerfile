@@ -93,7 +93,7 @@ if /out/agentgateway --version | grep -q '"unknown"'; then
 fi
 EOF
 
-FROM cgr.dev/chainguard/glibc-dynamic@sha256:7ff79e2caef2b8a137ddaf9940fb790e91148482092363760d6661e4591fd54c AS runner
+FROM cgr.dev/chainguard/glibc-dynamic@sha256:671a621016fb33812136dea6182b1db957996d3c8c618187aaf86abd9b14af53 AS runner
 
 ARG TARGETARCH
 
